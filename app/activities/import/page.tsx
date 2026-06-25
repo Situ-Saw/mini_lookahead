@@ -5,7 +5,7 @@ import * as XLSX from "xlsx";
 import type { ImportActivitiesResponse } from "@/lib/primavera-import";
 import {
   type PrimaveraExcelRow,
-  parsePrimaveraWorksheet,
+  parsePrimaveraExcelRows,
 } from "@/lib/primavera-import";
 
 const ACCEPTED_EXTENSIONS = [".xlsx", ".xls"];
@@ -49,7 +49,11 @@ function formatCellValue(value: unknown): string {
 
 async function parseExcelFile(file: File): Promise<PrimaveraExcelRow[]> {
   const buffer = await file.arrayBuffer();
-  const workbook = XLSX.read(buffer, { type: "array", cellDates: true });
+  const workbook = XLSX.read(buffer, {
+    type: "array",
+    cellDates: true,
+    dateNF: "yyyy-mm-dd",
+  });
 
   const firstSheetName = workbook.SheetNames[0];
   if (!firstSheetName) {
@@ -57,7 +61,7 @@ async function parseExcelFile(file: File): Promise<PrimaveraExcelRow[]> {
   }
 
   const worksheet = workbook.Sheets[firstSheetName];
-  return parsePrimaveraWorksheet(worksheet);
+  return parsePrimaveraExcelRows(worksheet);
 }
 
 export default function ImportActivitiesPage() {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
 type Activity = {
@@ -11,14 +11,42 @@ type Activity = {
   start_date: string | null;
   finish_date: string | null;
   duration: number | string | null;
+  act_start_date: string | null;
+  act_end_date: string | null;
+  act_duration: number | string | null;
   progress: number | string | null;
+  delay_days: number | string | null;
   responsible_engineer: string | null;
 };
+
+type SortField = "start_date" | "finish_date";
+type SortDirection = "asc" | "desc";
+
+type ActivityFilter =
+  | "all"
+  | "completed"
+  | "in_progress"
+  | "not_started"
+  | "delayed"
+  | "on_track";
+
+const FILTER_OPTIONS: Array<{ value: ActivityFilter; label: string }> = [
+  { value: "all", label: "All" },
+  { value: "completed", label: "Completed" },
+  { value: "in_progress", label: "In Progress" },
+  { value: "not_started", label: "Not Started" },
+  { value: "delayed", label: "Delayed" },
+  { value: "on_track", label: "On Track" },
+];
 
 function formatDate(value: string | null): string {
   if (!value) return "—";
 
-  const date = new Date(value);
+  const datePart = value.split("T")[0];
+  const [year, month, day] = datePart.split("-").map(Number);
+  if (!year || !month || !day) return value;
+
+  const date = new Date(year, month - 1, day);
   if (Number.isNaN(date.getTime())) return value;
 
   return new Intl.DateTimeFormat("en-US", {
@@ -42,11 +70,173 @@ function normalizeProgress(value: number | string | null): number {
   return Math.min(100, Math.max(0, Math.round(numeric)));
 }
 
+function parseDelayDays(value: number | string | null): number | null {
+  if (value === null || value === "") return null;
+
+  const numeric = typeof value === "number" ? value : Number(value);
+  if (Number.isNaN(numeric)) return null;
+
+  return numeric;
+}
+
+function parseSortableDate(value: string | null): number {
+  if (!value) return Number.POSITIVE_INFINITY;
+
+  const datePart = value.split("T")[0];
+  const [year, month, day] = datePart.split("-").map(Number);
+  if (!year || !month || !day) return Number.POSITIVE_INFINITY;
+
+  return new Date(year, month - 1, day).getTime();
+}
+
+function isCompleted(activity: Activity): boolean {
+  return activity.status === "Completed" || activity.act_end_date !== null;
+}
+
+function isInProgress(activity: Activity): boolean {
+  return activity.act_start_date !== null && activity.act_end_date === null;
+}
+
+function isNotStarted(activity: Activity): boolean {
+  return activity.act_start_date === null && activity.status !== "Completed";
+}
+
+function isDelayed(activity: Activity): boolean {
+  const delayDays = parseDelayDays(activity.delay_days);
+  return delayDays !== null && delayDays > 0;
+}
+
+function isOnTrack(activity: Activity): boolean {
+  const delayDays = parseDelayDays(activity.delay_days);
+  return delayDays === null || delayDays <= 0;
+}
+
+function matchesFilter(activity: Activity, filter: ActivityFilter): boolean {
+  switch (filter) {
+    case "all":
+      return true;
+    case "completed":
+      return isCompleted(activity);
+    case "in_progress":
+      return isInProgress(activity);
+    case "not_started":
+      return isNotStarted(activity);
+    case "delayed":
+      return isDelayed(activity);
+    case "on_track":
+      return isOnTrack(activity);
+    default:
+      return true;
+  }
+}
+
 function getProgressBarColor(progress: number): string {
   if (progress === 0) return "bg-zinc-400 dark:bg-zinc-500";
   if (progress < 50) return "bg-amber-400 dark:bg-amber-500";
   if (progress < 100) return "bg-blue-500 dark:bg-blue-400";
   return "bg-emerald-500 dark:bg-emerald-400";
+}
+
+type StatusCategory = "not_started" | "in_progress" | "completed" | "other";
+
+function getStatusCategory(status: string | null): StatusCategory {
+  if (!status) return "other";
+
+  const normalized = status.toLowerCase().trim();
+
+  if (
+    (normalized.includes("not") && normalized.includes("start")) ||
+    normalized === "tk_notstart" ||
+    normalized === "ns"
+  ) {
+    return "not_started";
+  }
+
+  if (
+    normalized.includes("progress") ||
+    normalized.includes("active") ||
+    normalized === "tk_active"
+  ) {
+    return "in_progress";
+  }
+
+  if (normalized.includes("complete") || normalized === "tk_complete") {
+    return "completed";
+  }
+
+  return "other";
+}
+
+function getStatusLabel(status: string | null): string {
+  if (!status) return "Unknown";
+
+  const category = getStatusCategory(status);
+  switch (category) {
+    case "not_started":
+      return "Not Started";
+    case "in_progress":
+      return "In Progress";
+    case "completed":
+      return "Completed";
+    default:
+      return status;
+  }
+}
+
+function StatusBadge({ status }: { status: string | null }) {
+  const category = getStatusCategory(status);
+  const label = getStatusLabel(status);
+
+  const className =
+    category === "not_started"
+      ? "bg-zinc-100 text-zinc-700 ring-zinc-200 dark:bg-zinc-800 dark:text-zinc-200 dark:ring-zinc-700"
+      : category === "in_progress"
+        ? "bg-blue-100 text-blue-800 ring-blue-200 dark:bg-blue-950/50 dark:text-blue-200 dark:ring-blue-900"
+        : category === "completed"
+          ? "bg-emerald-100 text-emerald-800 ring-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-200 dark:ring-emerald-900"
+          : "bg-zinc-100 text-zinc-700 ring-zinc-200 dark:bg-zinc-800 dark:text-zinc-200 dark:ring-zinc-700";
+
+  return (
+    <span
+      className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset ${className}`}
+    >
+      {label}
+    </span>
+  );
+}
+
+function DelayBadge({ delayDays }: { delayDays: number | string | null }) {
+  const parsed = parseDelayDays(delayDays);
+
+  if (parsed === null) {
+    return (
+      <span className="inline-flex items-center rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-600 ring-1 ring-inset ring-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:ring-zinc-700">
+        —
+      </span>
+    );
+  }
+
+  if (parsed === 0) {
+    return (
+      <span className="inline-flex items-center rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-600 ring-1 ring-inset ring-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:ring-zinc-700">
+        On Track
+      </span>
+    );
+  }
+
+  if (parsed > 0) {
+    return (
+      <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-1 text-xs font-medium text-red-800 ring-1 ring-inset ring-red-200 dark:bg-red-950/50 dark:text-red-200 dark:ring-red-900">
+        +{parsed} days
+      </span>
+    );
+  }
+
+  return (
+    <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-800 ring-1 ring-inset ring-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-200 dark:ring-emerald-900">
+      {parsed} days
+    </span>
+  );
 }
 
 function ProgressBar({ progress }: { progress: number }) {
@@ -68,134 +258,68 @@ function ProgressBar({ progress }: { progress: number }) {
   );
 }
 
-function EditProgressModal({
-  activity,
-  isSaving,
-  saveError,
-  onCancel,
-  onSave,
+function FilterButton({
+  label,
+  value,
+  activeFilter,
+  onSelect,
 }: {
-  activity: Activity;
-  isSaving: boolean;
-  saveError: string | null;
-  onCancel: () => void;
-  onSave: (progress: number) => void;
+  label: string;
+  value: ActivityFilter;
+  activeFilter: ActivityFilter;
+  onSelect: (filter: ActivityFilter) => void;
 }) {
-  const [progress, setProgress] = useState(() =>
-    normalizeProgress(activity.progress),
-  );
-
-  useEffect(() => {
-    setProgress(normalizeProgress(activity.progress));
-  }, [activity]);
-
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !isSaving) {
-        onCancel();
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isSaving, onCancel]);
+  const isActive = activeFilter === value;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <button
-        type="button"
-        aria-label="Close dialog"
-        className="absolute inset-0 bg-black/50"
-        onClick={isSaving ? undefined : onCancel}
-        disabled={isSaving}
-      />
-
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="edit-progress-title"
-        className="relative z-10 w-full max-w-md rounded-xl border border-zinc-200 bg-white p-6 shadow-xl dark:border-zinc-800 dark:bg-zinc-950"
-      >
-        <h2
-          id="edit-progress-title"
-          className="text-lg font-semibold text-zinc-900 dark:text-zinc-100"
-        >
-          Update Progress
-        </h2>
-
-        <div className="mt-4 space-y-1 rounded-lg bg-zinc-50 px-4 py-3 dark:bg-zinc-900/60">
-          <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-            Activity ID
-          </p>
-          <p className="font-mono text-sm text-zinc-900 dark:text-zinc-100">
-            {activity.activity_id}
-          </p>
-          <p className="mt-3 text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-            Activity Name
-          </p>
-          <p className="text-sm text-zinc-900 dark:text-zinc-100">
-            {activity.activity_name}
-          </p>
-        </div>
-
-        <div className="mt-6">
-          <p className="mb-3 text-sm font-medium text-zinc-700 dark:text-zinc-300">
-            Progress: {progress}%
-          </p>
-          <input
-            type="range"
-            min={0}
-            max={100}
-            step={1}
-            value={progress}
-            disabled={isSaving}
-            onChange={(event) =>
-              setProgress(Number.parseInt(event.target.value, 10))
-            }
-            className="h-2 w-full cursor-pointer appearance-none rounded-full bg-zinc-200 accent-blue-600 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-800"
-          />
-          <div className="mt-1 flex justify-between text-xs text-zinc-500 dark:text-zinc-400">
-            <span>0%</span>
-            <span>100%</span>
-          </div>
-        </div>
-
-        {saveError && (
-          <p className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
-            {saveError}
-          </p>
-        )}
-
-        <div className="mt-6 flex justify-end gap-3">
-          <button
-            type="button"
-            onClick={onCancel}
-            disabled={isSaving}
-            className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={() => onSave(progress)}
-            disabled={isSaving}
-            className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
-          >
-            {isSaving ? "Saving..." : "Save"}
-          </button>
-        </div>
-      </div>
-    </div>
+    <button
+      type="button"
+      onClick={() => onSelect(value)}
+      className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+        isActive
+          ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+          : "bg-white text-zinc-700 ring-1 ring-zinc-200 hover:bg-zinc-50 dark:bg-zinc-950 dark:text-zinc-200 dark:ring-zinc-700 dark:hover:bg-zinc-900"
+      }`}
+    >
+      {label}
+    </button>
   );
 }
 
-function ActivitiesTable({
-  activities,
-  onEditClick,
+function SortButton({
+  label,
+  field,
+  activeField,
+  direction,
+  onSort,
 }: {
-  activities: Activity[];
-  onEditClick: (activity: Activity) => void;
+  label: string;
+  field: SortField;
+  activeField: SortField;
+  direction: SortDirection;
+  onSort: (field: SortField) => void;
 }) {
+  const isActive = activeField === field;
+
+  return (
+    <button
+      type="button"
+      onClick={() => onSort(field)}
+      className={`inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+        isActive
+          ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+          : "bg-white text-zinc-700 ring-1 ring-zinc-200 hover:bg-zinc-50 dark:bg-zinc-950 dark:text-zinc-200 dark:ring-zinc-700 dark:hover:bg-zinc-900"
+      }`}
+    >
+      {label}
+      {isActive && (
+        <span aria-hidden="true">{direction === "asc" ? "↑" : "↓"}</span>
+      )}
+    </button>
+  );
+}
+
+function ActivitiesTable({ activities }: { activities: Activity[] }) {
   const innerRef = useRef<HTMLDivElement>(null);
   const outerRef = useRef<HTMLDivElement>(null);
   const tableRef = useRef<HTMLTableElement>(null);
@@ -289,6 +413,15 @@ function ActivitiesTable({
                 Finish Date
               </th>
               <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+                Actual Start
+              </th>
+              <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+                Actual Finish
+              </th>
+              <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+                Delay
+              </th>
+              <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
                 Duration
               </th>
               <th className="min-w-[10rem] whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
@@ -296,9 +429,6 @@ function ActivitiesTable({
               </th>
               <th className="min-w-[10rem] whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
                 Responsible Engineer
-              </th>
-              <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
-                Actions
               </th>
             </tr>
           </thead>
@@ -314,8 +444,8 @@ function ActivitiesTable({
                 <td className="whitespace-nowrap px-4 py-3 font-medium text-zinc-900 dark:text-zinc-100">
                   {formatCell(activity.activity_name)}
                 </td>
-                <td className="whitespace-nowrap px-4 py-3 text-zinc-700 dark:text-zinc-300">
-                  {formatCell(activity.status)}
+                <td className="whitespace-nowrap px-4 py-3">
+                  <StatusBadge status={activity.status} />
                 </td>
                 <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-zinc-700 dark:text-zinc-300">
                   {formatCell(activity.wbs_code)}
@@ -327,22 +457,24 @@ function ActivitiesTable({
                   {formatDate(activity.finish_date)}
                 </td>
                 <td className="whitespace-nowrap px-4 py-3 text-zinc-700 dark:text-zinc-300">
+                  {formatDate(activity.act_start_date)}
+                </td>
+                <td className="whitespace-nowrap px-4 py-3 text-zinc-700 dark:text-zinc-300">
+                  {formatDate(activity.act_end_date)}
+                </td>
+                <td className="whitespace-nowrap px-4 py-3">
+                  <DelayBadge delayDays={activity.delay_days} />
+                </td>
+                <td className="whitespace-nowrap px-4 py-3 text-zinc-700 dark:text-zinc-300">
                   {formatCell(activity.duration)}
                 </td>
                 <td className="whitespace-nowrap px-4 py-3">
-                  <ProgressBar progress={normalizeProgress(activity.progress)} />
+                  <ProgressBar
+                    progress={normalizeProgress(activity.progress)}
+                  />
                 </td>
                 <td className="whitespace-nowrap px-4 py-3 text-zinc-700 dark:text-zinc-300">
                   {formatCell(activity.responsible_engineer)}
-                </td>
-                <td className="whitespace-nowrap px-4 py-3">
-                  <button
-                    type="button"
-                    onClick={() => onEditClick(activity)}
-                    className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
-                  >
-                    Edit
-                  </button>
                 </td>
               </tr>
             ))}
@@ -365,9 +497,10 @@ export default function ActivitiesPage() {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
-  const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeFilter, setActiveFilter] = useState<ActivityFilter>("all");
+  const [sortField, setSortField] = useState<SortField>("start_date");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
 
   useEffect(() => {
     document.title = "Activity Master";
@@ -383,7 +516,7 @@ export default function ActivitiesPage() {
       const { data, error } = await supabase
         .from("activities")
         .select(
-          "activity_id, activity_name, status, wbs_code, start_date, finish_date, duration, progress, responsible_engineer",
+          "activity_id, activity_name, wbs_code, status, start_date, finish_date, duration, act_start_date, act_end_date, act_duration, progress, delay_days, responsible_engineer",
         )
         .order("activity_id", { ascending: true });
 
@@ -406,51 +539,48 @@ export default function ActivitiesPage() {
     };
   }, []);
 
-  const handleEditClick = useCallback((activity: Activity) => {
-    setSaveError(null);
-    setEditingActivity(activity);
-  }, []);
+  const filteredByStatus = useMemo(
+    () => activities.filter((activity) => matchesFilter(activity, activeFilter)),
+    [activities, activeFilter],
+  );
 
-  const handleCancelEdit = useCallback(() => {
-    if (isSaving) return;
-    setEditingActivity(null);
-    setSaveError(null);
-  }, [isSaving]);
+  const filteredActivities = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return filteredByStatus;
 
-  const handleSaveProgress = useCallback(
-    async (progress: number) => {
-      if (!editingActivity) return;
+    return filteredByStatus.filter((activity) => {
+      const activityId = activity.activity_id.toLowerCase();
+      const activityName = activity.activity_name.toLowerCase();
+      return activityId.includes(query) || activityName.includes(query);
+    });
+  }, [filteredByStatus, searchQuery]);
 
-      const normalizedProgress = normalizeProgress(progress);
+  const sortedActivities = useMemo(() => {
+    const sorted = [...filteredActivities];
 
-      setIsSaving(true);
-      setSaveError(null);
+    sorted.sort((left, right) => {
+      const leftValue = parseSortableDate(left[sortField]);
+      const rightValue = parseSortableDate(right[sortField]);
+      const comparison = leftValue - rightValue;
+      return sortDirection === "asc" ? comparison : -comparison;
+    });
 
-      const { error } = await supabase
-        .from("activities")
-        .update({ progress: normalizedProgress })
-        .eq("activity_id", editingActivity.activity_id);
+    return sorted;
+  }, [filteredActivities, sortDirection, sortField]);
 
-      if (error) {
-        setSaveError(error.message);
-        setIsSaving(false);
-        return;
+  const handleSort = useCallback((field: SortField) => {
+    setSortField((currentField) => {
+      if (currentField === field) {
+        setSortDirection((currentDirection) =>
+          currentDirection === "asc" ? "desc" : "asc",
+        );
+        return currentField;
       }
 
-      setActivities((current) =>
-        current.map((activity) =>
-          activity.activity_id === editingActivity.activity_id
-            ? { ...activity, progress: normalizedProgress }
-            : activity,
-        ),
-      );
-
-      setIsSaving(false);
-      setEditingActivity(null);
-      setSaveError(null);
-    },
-    [editingActivity],
-  );
+      setSortDirection("asc");
+      return field;
+    });
+  }, []);
 
   if (fetchError) {
     return (
@@ -474,8 +604,60 @@ export default function ActivitiesPage() {
         <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
           {isLoading
             ? "Loading activities..."
-            : `${activities.length} ${activities.length === 1 ? "activity" : "activities"}`}
+            : `Showing ${sortedActivities.length} of ${activities.length} ${activities.length === 1 ? "activity" : "activities"}`}
         </p>
+      </div>
+
+      <div className="mb-4 flex flex-wrap gap-2">
+        {FILTER_OPTIONS.map((option) => (
+          <FilterButton
+            key={option.value}
+            label={option.label}
+            value={option.value}
+            activeFilter={activeFilter}
+            onSelect={setActiveFilter}
+          />
+        ))}
+      </div>
+
+      <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div className="w-full lg:max-w-md">
+          <label
+            htmlFor="activity-search"
+            className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+          >
+            Search activities
+          </label>
+          <input
+            id="activity-search"
+            type="search"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="Search by Activity ID or Activity Name"
+            disabled={isLoading}
+            className="w-full rounded-lg border border-zinc-300 bg-white px-4 py-2.5 text-sm text-zinc-900 shadow-sm outline-none ring-blue-500 placeholder:text-zinc-400 focus:border-blue-500 focus:ring-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-500"
+          />
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm font-medium text-zinc-600 dark:text-zinc-400">
+            Sort by:
+          </span>
+          <SortButton
+            label="Start Date"
+            field="start_date"
+            activeField={sortField}
+            direction={sortDirection}
+            onSort={handleSort}
+          />
+          <SortButton
+            label="Finish Date"
+            field="finish_date"
+            activeField={sortField}
+            direction={sortDirection}
+            onSort={handleSort}
+          />
+        </div>
       </div>
 
       {isLoading ? (
@@ -486,21 +668,12 @@ export default function ActivitiesPage() {
         <p className="rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-8 text-center text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-400">
           No activities found
         </p>
+      ) : sortedActivities.length === 0 ? (
+        <p className="rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-8 text-center text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-400">
+          No activities match your search or filter.
+        </p>
       ) : (
-        <ActivitiesTable
-          activities={activities}
-          onEditClick={handleEditClick}
-        />
-      )}
-
-      {editingActivity && (
-        <EditProgressModal
-          activity={editingActivity}
-          isSaving={isSaving}
-          saveError={saveError}
-          onCancel={handleCancelEdit}
-          onSave={handleSaveProgress}
-        />
+        <ActivitiesTable activities={sortedActivities} />
       )}
     </main>
   );
