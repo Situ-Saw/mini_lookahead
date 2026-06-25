@@ -57,11 +57,6 @@ export async function POST(request: Request) {
   const mappedActivities = mapRowsToActivities(validRows, mode);
   const totalValidRows = mappedActivities.length;
 
-  console.log("Rows received:", totalReceived);
-  console.log("Rows after filtering:", totalValidRows);
-  console.log("Import mode:", mode);
-  console.log("First mapped row:", mappedActivities[0] ?? null);
-
   if (mode === "baseline") {
     const { count, error: baselineCountError } = await supabase
       .from("activities")
