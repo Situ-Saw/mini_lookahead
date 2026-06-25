@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import {
   AlertTriangle,
   Calendar,
+  CalendarCheck,
   ClipboardList,
   LayoutDashboard,
   Menu,
@@ -33,6 +34,11 @@ const NAV_ITEMS = [
     label: "Look Ahead",
     href: "/lookahead",
     icon: Calendar,
+  },
+  {
+    label: "Planning",
+    href: "/planning",
+    icon: CalendarCheck,
   },
   {
     label: "Constraints",

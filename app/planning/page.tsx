@@ -1,0 +1,1460 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import { supabase } from "@/lib/supabase";
+
+const SESSION_LENGTH_DAYS = 14;
+const MS_PER_DAY = 86_400_000;
+
+type PlanningSession = {
+  id: string;
+  start_date: string;
+  end_date: string;
+  status: string;
+  ppc_score: number | null;
+  created_at: string;
+  closed_at: string | null;
+};
+
+type ActivityPreview = {
+  activity_id: string;
+  activity_name: string;
+  finish_date: string | null;
+};
+
+type SessionActivityRow = {
+  id: string;
+  session_id: string;
+  activity_id: string;
+  was_completed: boolean;
+  completed_at: string | null;
+  created_at: string;
+  activities: {
+    activity_name: string;
+    finish_date: string | null;
+    status: string | null;
+    progress: number | null;
+  } | null;
+};
+
+function normalizeSessionActivityRow(
+  row: Record<string, unknown>,
+): SessionActivityRow {
+  const activities = row.activities;
+  const activity =
+    Array.isArray(activities) && activities.length > 0
+      ? (activities[0] as SessionActivityRow["activities"])
+      : ((activities as SessionActivityRow["activities"]) ?? null);
+
+  return {
+    id: String(row.id),
+    session_id: String(row.session_id),
+    activity_id: String(row.activity_id),
+    was_completed: Boolean(row.was_completed),
+    completed_at: (row.completed_at as string | null) ?? null,
+    created_at: String(row.created_at),
+    activities: activity,
+  };
+}
+
+type DailyLog = {
+  id: string;
+  session_id: string;
+  log_date: string;
+  note: string;
+  logged_by: string | null;
+  created_at: string;
+};
+
+type SessionActivitySummary = {
+  id: string;
+  was_completed: boolean;
+};
+
+type ClosedSession = PlanningSession & {
+  session_activities: SessionActivitySummary[] | null;
+};
+
+type ChartDatum = {
+  id: string;
+  label: string;
+  ppc: number;
+  total: number;
+  completed: number;
+  startDate: string;
+  endDate: string;
+};
+
+type StatusCategory = "not_started" | "in_progress" | "completed" | "other";
+
+function parseDateOnly(value: string | null): Date | null {
+  if (!value) return null;
+
+  const datePart = value.split("T")[0];
+  const [year, month, day] = datePart.split("-").map(Number);
+  if (!year || !month || !day) return null;
+
+  const date = new Date(year, month - 1, day);
+  if (Number.isNaN(date.getTime())) return null;
+
+  return date;
+}
+
+function startOfToday(): Date {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+}
+
+function dateToIso(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function todayIso(): string {
+  return dateToIso(startOfToday());
+}
+
+function addDaysToIso(isoDate: string, days: number): string {
+  const parsed = parseDateOnly(isoDate);
+  if (!parsed) return isoDate;
+
+  const result = new Date(parsed);
+  result.setDate(result.getDate() + days);
+  return dateToIso(result);
+}
+
+function clampIsoDateToMinimum(value: string, minimum: string): string {
+  if (!value || value < minimum) return minimum;
+  return value;
+}
+
+function calculateMinStartDate(lastClosedEndDate: string | null): string {
+  const today = todayIso();
+
+  if (!lastClosedEndDate) return today;
+
+  const dayAfterPrevious = addDaysToIso(lastClosedEndDate, 1);
+  return dayAfterPrevious < today ? today : dayAfterPrevious;
+}
+
+function differenceInCalendarDays(later: Date, earlier: Date): number {
+  return Math.round((later.getTime() - earlier.getTime()) / MS_PER_DAY);
+}
+
+function formatDate(value: string | null): string {
+  if (!value) return "—";
+
+  const date = parseDateOnly(value);
+  if (!date) return value;
+
+  return new Intl.DateTimeFormat("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  }).format(date);
+}
+
+function formatDateTime(value: string | null): string {
+  if (!value) return "—";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+
+  return new Intl.DateTimeFormat("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function formatSessionRange(start: string, end: string): string {
+  const startDate = parseDateOnly(start);
+  const endDate = parseDateOnly(end);
+  if (!startDate || !endDate) return `${start} - ${end}`;
+
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+  });
+
+  return `${formatter.format(startDate)} - ${formatter.format(endDate)}`;
+}
+
+function calculatePpc(completed: number, total: number): number {
+  if (total === 0) return 0;
+  return Math.round((completed / total) * 1000) / 10;
+}
+
+function getPpcColorClasses(ppc: number): {
+  badge: string;
+  bar: string;
+} {
+  if (ppc >= 100) {
+    return {
+      badge:
+        "bg-emerald-100 text-emerald-800 ring-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-200 dark:ring-emerald-900",
+      bar: "#10b981",
+    };
+  }
+  if (ppc >= 71) {
+    return {
+      badge:
+        "bg-blue-100 text-blue-800 ring-blue-200 dark:bg-blue-950/50 dark:text-blue-200 dark:ring-blue-900",
+      bar: "#3b82f6",
+    };
+  }
+  if (ppc >= 41) {
+    return {
+      badge:
+        "bg-amber-100 text-amber-800 ring-amber-200 dark:bg-amber-950/50 dark:text-amber-200 dark:ring-amber-900",
+      bar: "#f59e0b",
+    };
+  }
+  return {
+    badge:
+      "bg-red-100 text-red-800 ring-red-200 dark:bg-red-950/50 dark:text-red-200 dark:ring-red-900",
+    bar: "#ef4444",
+  };
+}
+
+function getStatusCategory(status: string | null): StatusCategory {
+  if (!status) return "other";
+
+  const normalized = status.toLowerCase().trim();
+
+  if (
+    (normalized.includes("not") && normalized.includes("start")) ||
+    normalized === "tk_notstart" ||
+    normalized === "ns"
+  ) {
+    return "not_started";
+  }
+
+  if (
+    normalized.includes("progress") ||
+    normalized.includes("active") ||
+    normalized === "tk_active"
+  ) {
+    return "in_progress";
+  }
+
+  if (normalized.includes("complete") || normalized === "tk_complete") {
+    return "completed";
+  }
+
+  return "other";
+}
+
+function getStatusLabel(status: string | null): string {
+  if (!status) return "Unknown";
+
+  const category = getStatusCategory(status);
+  switch (category) {
+    case "not_started":
+      return "Not Started";
+    case "in_progress":
+      return "In Progress";
+    case "completed":
+      return "Completed";
+    default:
+      return status;
+  }
+}
+
+function StatusBadge({ status }: { status: string | null }) {
+  const category = getStatusCategory(status);
+  const label = getStatusLabel(status);
+
+  const className =
+    category === "not_started"
+      ? "bg-zinc-100 text-zinc-700 ring-zinc-200 dark:bg-zinc-800 dark:text-zinc-200 dark:ring-zinc-700"
+      : category === "in_progress"
+        ? "bg-blue-100 text-blue-800 ring-blue-200 dark:bg-blue-950/50 dark:text-blue-200 dark:ring-blue-900"
+        : category === "completed"
+          ? "bg-emerald-100 text-emerald-800 ring-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-200 dark:ring-emerald-900"
+          : "bg-zinc-100 text-zinc-700 ring-zinc-200 dark:bg-zinc-800 dark:text-zinc-200 dark:ring-zinc-700";
+
+  return (
+    <span
+      className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset ${className}`}
+    >
+      {label}
+    </span>
+  );
+}
+
+function PpcBadge({ ppc }: { ppc: number }) {
+  const colors = getPpcColorClasses(ppc);
+
+  return (
+    <span
+      className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-semibold ring-1 ring-inset ${colors.badge}`}
+    >
+      PPC {ppc.toFixed(1)}%
+    </span>
+  );
+}
+
+type ChartTooltipProps = {
+  active?: boolean;
+  payload?: Array<{ payload: ChartDatum }>;
+};
+
+function PpcChartTooltip({ active, payload }: ChartTooltipProps) {
+  if (!active || !payload?.length) return null;
+
+  const data = payload[0].payload;
+
+  return (
+    <div className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm shadow-md dark:border-zinc-700 dark:bg-zinc-900">
+      <p className="font-medium text-zinc-900 dark:text-zinc-100">
+        {formatSessionRange(data.startDate, data.endDate)}
+      </p>
+      <p className="mt-1 text-zinc-600 dark:text-zinc-400">
+        PPC: {data.ppc.toFixed(1)}%
+      </p>
+      <p className="text-zinc-600 dark:text-zinc-400">
+        Completed: {data.completed} / {data.total}
+      </p>
+    </div>
+  );
+}
+
+export default function PlanningPage() {
+  const [activeSession, setActiveSession] = useState<PlanningSession | null>(
+    null,
+  );
+  const [sessionActivities, setSessionActivities] = useState<
+    SessionActivityRow[]
+  >([]);
+  const [dailyLogs, setDailyLogs] = useState<DailyLog[]>([]);
+  const [closedSessions, setClosedSessions] = useState<ClosedSession[]>([]);
+  const [previewActivities, setPreviewActivities] = useState<ActivityPreview[]>(
+    [],
+  );
+
+  const [isLoading, setIsLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const [lastClosedSessionEndDate, setLastClosedSessionEndDate] = useState<
+    string | null
+  >(null);
+  const [startDateInput, setStartDateInput] = useState(todayIso);
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+  const [isStarting, setIsStarting] = useState(false);
+  const [actionActivityId, setActionActivityId] = useState<string | null>(null);
+  const [isClosing, setIsClosing] = useState(false);
+  const [showCloseConfirm, setShowCloseConfirm] = useState(false);
+
+  const [logDate, setLogDate] = useState(todayIso);
+  const [loggedBy, setLoggedBy] = useState("");
+  const [logNote, setLogNote] = useState("");
+  const [isAddingLog, setIsAddingLog] = useState(false);
+
+  const [expandedLogSessions, setExpandedLogSessions] = useState<Set<string>>(
+    new Set(),
+  );
+  const [sessionLogsCache, setSessionLogsCache] = useState<
+    Record<string, DailyLog[]>
+  >({});
+  const [loadingLogsFor, setLoadingLogsFor] = useState<string | null>(null);
+
+  const loadData = useCallback(async () => {
+    setIsLoading(true);
+    setFetchError(null);
+
+    const { data: activeData, error: activeError } = await supabase
+      .from("planning_sessions")
+      .select("*")
+      .eq("status", "active")
+      .limit(1)
+      .maybeSingle();
+
+    if (activeError) {
+      setFetchError(activeError.message);
+      setActiveSession(null);
+      setSessionActivities([]);
+      setDailyLogs([]);
+      setClosedSessions([]);
+      setIsLoading(false);
+      return;
+    }
+
+    const session = activeData as PlanningSession | null;
+    setActiveSession(session);
+
+    if (session) {
+      const [activitiesResult, logsResult] = await Promise.all([
+        supabase
+          .from("session_activities")
+          .select(
+            `
+            id,
+            session_id,
+            activity_id,
+            was_completed,
+            completed_at,
+            created_at,
+            activities (
+              activity_name,
+              finish_date,
+              status,
+              progress
+            )
+          `,
+          )
+          .eq("session_id", session.id)
+          .order("activity_id"),
+        supabase
+          .from("session_daily_logs")
+          .select("*")
+          .eq("session_id", session.id)
+          .order("log_date", { ascending: false }),
+      ]);
+
+      if (activitiesResult.error) {
+        setFetchError(activitiesResult.error.message);
+        setSessionActivities([]);
+        setDailyLogs([]);
+      } else {
+        setSessionActivities(
+          (activitiesResult.data ?? []).map((row) =>
+            normalizeSessionActivityRow(row as Record<string, unknown>),
+          ),
+        );
+        setDailyLogs(
+          logsResult.error
+            ? []
+            : ((logsResult.data ?? []) as DailyLog[]),
+        );
+        if (logsResult.error) {
+          setActionError(logsResult.error.message);
+        }
+      }
+    } else {
+      setSessionActivities([]);
+      setDailyLogs([]);
+    }
+
+    const [closedResult, lastClosedResult] = await Promise.all([
+      supabase
+        .from("planning_sessions")
+        .select(
+          `
+          id,
+          start_date,
+          end_date,
+          status,
+          ppc_score,
+          created_at,
+          closed_at,
+          session_activities (
+            id,
+            was_completed
+          )
+        `,
+        )
+        .eq("status", "closed")
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("planning_sessions")
+        .select("end_date")
+        .eq("status", "closed")
+        .order("end_date", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ]);
+
+    if (closedResult.error) {
+      setFetchError((current) => current ?? closedResult.error.message);
+      setClosedSessions([]);
+    } else {
+      setClosedSessions((closedResult.data ?? []) as ClosedSession[]);
+    }
+
+    if (lastClosedResult.error) {
+      setFetchError((current) => current ?? lastClosedResult.error.message);
+      setLastClosedSessionEndDate(null);
+    } else {
+      setLastClosedSessionEndDate(
+        (lastClosedResult.data as { end_date: string } | null)?.end_date ?? null,
+      );
+    }
+
+    setIsLoading(false);
+  }, []);
+
+  useEffect(() => {
+    document.title = "Planning Sessions";
+  }, []);
+
+  useEffect(() => {
+    void loadData();
+  }, [loadData]);
+
+  const minStartDate = useMemo(
+    () => calculateMinStartDate(lastClosedSessionEndDate),
+    [lastClosedSessionEndDate],
+  );
+
+  useEffect(() => {
+    if (activeSession || isLoading) return;
+
+    setStartDateInput((current) => clampIsoDateToMinimum(current, minStartDate));
+  }, [activeSession, isLoading, minStartDate]);
+
+  const handleStartDateChange = useCallback(
+    (value: string) => {
+      setStartDateInput(clampIsoDateToMinimum(value, minStartDate));
+    },
+    [minStartDate],
+  );
+
+  const startDateHint = useMemo(() => {
+    if (!lastClosedSessionEndDate) {
+      return "Sessions can start from today onwards";
+    }
+
+    return `Sessions can start from ${formatDate(minStartDate)} (day after previous session ended)`;
+  }, [lastClosedSessionEndDate, minStartDate]);
+
+  useEffect(() => {
+    if (activeSession || isLoading) return;
+
+    let isMounted = true;
+
+    async function loadPreview() {
+      setIsPreviewLoading(true);
+      const endDate = addDaysToIso(startDateInput, SESSION_LENGTH_DAYS);
+
+      const { data, error } = await supabase
+        .from("activities")
+        .select("activity_id, activity_name, finish_date")
+        .gte("finish_date", startDateInput)
+        .lte("finish_date", endDate)
+        .order("activity_id");
+
+      if (!isMounted) return;
+
+      if (error) {
+        setActionError(error.message);
+        setPreviewActivities([]);
+      } else {
+        setPreviewActivities((data ?? []) as ActivityPreview[]);
+      }
+
+      setIsPreviewLoading(false);
+    }
+
+    void loadPreview();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [activeSession, isLoading, startDateInput]);
+
+  const livePpc = useMemo(() => {
+    const total = sessionActivities.length;
+    const completed = sessionActivities.filter((row) => row.was_completed).length;
+    return calculatePpc(completed, total);
+  }, [sessionActivities]);
+
+  const allActivitiesCompleted = useMemo(
+    () =>
+      sessionActivities.length > 0 &&
+      sessionActivities.every((row) => row.was_completed),
+    [sessionActivities],
+  );
+
+  const daysRemaining = useMemo(() => {
+    if (!activeSession) return 0;
+
+    const end = parseDateOnly(activeSession.end_date);
+    const today = startOfToday();
+    if (!end) return 0;
+
+    return Math.max(0, differenceInCalendarDays(end, today));
+  }, [activeSession]);
+
+  const chartData = useMemo<ChartDatum[]>(() => {
+    return closedSessions.map((session) => {
+      const activities = session.session_activities ?? [];
+      const total = activities.length;
+      const completed = activities.filter((row) => row.was_completed).length;
+      const ppc =
+        session.ppc_score !== null && session.ppc_score !== undefined
+          ? Number(session.ppc_score)
+          : calculatePpc(completed, total);
+
+      return {
+        id: session.id,
+        label: formatSessionRange(session.start_date, session.end_date),
+        ppc,
+        total,
+        completed,
+        startDate: session.start_date,
+        endDate: session.end_date,
+      };
+    });
+  }, [closedSessions]);
+
+  const updateSessionActivityStatus = useCallback(
+    (
+      sessionActivityId: string,
+      updates: {
+        was_completed?: boolean;
+        completed_at?: string | null;
+        status?: string;
+        progress?: number;
+      },
+    ) => {
+      setSessionActivities((current) =>
+        current.map((row) => {
+          if (row.id !== sessionActivityId) return row;
+
+          return {
+            ...row,
+            was_completed:
+              updates.was_completed !== undefined
+                ? updates.was_completed
+                : row.was_completed,
+            completed_at:
+              updates.completed_at !== undefined
+                ? updates.completed_at
+                : row.completed_at,
+            activities: row.activities
+              ? {
+                  ...row.activities,
+                  status:
+                    updates.status !== undefined
+                      ? updates.status
+                      : row.activities.status,
+                  progress:
+                    updates.progress !== undefined
+                      ? updates.progress
+                      : row.activities.progress,
+                }
+              : row.activities,
+          };
+        }),
+      );
+    },
+    [],
+  );
+
+  const handleMarkInProgress = useCallback(
+    async (sessionActivityId: string, activityId: string) => {
+      setActionError(null);
+      setActionActivityId(sessionActivityId);
+
+      const { error } = await supabase
+        .from("activities")
+        .update({ status: "In Progress" })
+        .eq("activity_id", activityId);
+
+      if (error) {
+        setActionError(error.message);
+        setActionActivityId(null);
+        return;
+      }
+
+      updateSessionActivityStatus(sessionActivityId, {
+        status: "In Progress",
+      });
+      setActionActivityId(null);
+    },
+    [updateSessionActivityStatus],
+  );
+
+  const handleMarkComplete = useCallback(
+    async (sessionActivityId: string, activityId: string) => {
+      setActionError(null);
+      setActionActivityId(sessionActivityId);
+
+      const completedAt = new Date().toISOString();
+
+      const { error: sessionError } = await supabase
+        .from("session_activities")
+        .update({ was_completed: true, completed_at: completedAt })
+        .eq("id", sessionActivityId);
+
+      if (sessionError) {
+        setActionError(sessionError.message);
+        setActionActivityId(null);
+        return;
+      }
+
+      const { error: activityError } = await supabase
+        .from("activities")
+        .update({ status: "Completed", progress: 100 })
+        .eq("activity_id", activityId);
+
+      if (activityError) {
+        setActionError(activityError.message);
+        setActionActivityId(null);
+        return;
+      }
+
+      updateSessionActivityStatus(sessionActivityId, {
+        was_completed: true,
+        completed_at: completedAt,
+        status: "Completed",
+        progress: 100,
+      });
+      setActionActivityId(null);
+    },
+    [updateSessionActivityStatus],
+  );
+
+  const handleCloseSession = useCallback(async () => {
+    if (!activeSession || !allActivitiesCompleted) return;
+
+    setIsClosing(true);
+    setActionError(null);
+
+    const ppcScore = livePpc;
+    const closedAt = new Date().toISOString();
+
+    const { error } = await supabase
+      .from("planning_sessions")
+      .update({
+        status: "closed",
+        closed_at: closedAt,
+        ppc_score: ppcScore,
+      })
+      .eq("id", activeSession.id);
+
+    if (error) {
+      setActionError(error.message);
+      setIsClosing(false);
+      setShowCloseConfirm(false);
+      return;
+    }
+
+    setShowCloseConfirm(false);
+    setIsClosing(false);
+    await loadData();
+  }, [activeSession, allActivitiesCompleted, livePpc, loadData]);
+
+  const handleStartSession = useCallback(async () => {
+    if (activeSession || previewActivities.length === 0) return;
+
+    setIsStarting(true);
+    setActionError(null);
+
+    const endDate = addDaysToIso(startDateInput, SESSION_LENGTH_DAYS);
+
+    const { data: session, error: sessionError } = await supabase
+      .from("planning_sessions")
+      .insert({
+        start_date: startDateInput,
+        end_date: endDate,
+        status: "active",
+      })
+      .select()
+      .single();
+
+    if (sessionError || !session) {
+      setActionError(sessionError?.message ?? "Failed to create planning session.");
+      setIsStarting(false);
+      return;
+    }
+
+    const activityRows = previewActivities.map((activity) => ({
+      session_id: session.id,
+      activity_id: activity.activity_id,
+      was_completed: false,
+    }));
+
+    const { error: activitiesError } = await supabase
+      .from("session_activities")
+      .insert(activityRows);
+
+    if (activitiesError) {
+      setActionError(activitiesError.message);
+      setIsStarting(false);
+      return;
+    }
+
+    const committedActivityIds = previewActivities.map(
+      (activity) => activity.activity_id,
+    );
+
+    const { data: completedActivities, error: completedLookupError } =
+      await supabase
+        .from("activities")
+        .select("activity_id")
+        .eq("status", "Completed")
+        .in("activity_id", committedActivityIds);
+
+    if (completedLookupError) {
+      setActionError(completedLookupError.message);
+      setIsStarting(false);
+      return;
+    }
+
+    const completedActivityIds = (completedActivities ?? []).map(
+      (activity) => activity.activity_id,
+    );
+
+    if (completedActivityIds.length > 0) {
+      const completedAt = new Date().toISOString();
+
+      const { error: syncError } = await supabase
+        .from("session_activities")
+        .update({ was_completed: true, completed_at: completedAt })
+        .eq("session_id", session.id)
+        .in("activity_id", completedActivityIds);
+
+      if (syncError) {
+        setActionError(syncError.message);
+        setIsStarting(false);
+        return;
+      }
+    }
+
+    setIsStarting(false);
+    await loadData();
+  }, [activeSession, previewActivities, startDateInput, loadData]);
+
+  const handleAddLog = useCallback(async () => {
+    if (!activeSession || !logNote.trim()) return;
+
+    setIsAddingLog(true);
+    setActionError(null);
+
+    const { data, error } = await supabase
+      .from("session_daily_logs")
+      .insert({
+        session_id: activeSession.id,
+        log_date: logDate,
+        note: logNote.trim(),
+        logged_by: loggedBy.trim() || null,
+      })
+      .select()
+      .single();
+
+    if (error || !data) {
+      setActionError(error?.message ?? "Failed to add daily log.");
+      setIsAddingLog(false);
+      return;
+    }
+
+    setDailyLogs((current) => [data as DailyLog, ...current]);
+    setLogNote("");
+    setIsAddingLog(false);
+  }, [activeSession, logDate, logNote, loggedBy]);
+
+  const toggleSessionLogs = useCallback(
+    async (sessionId: string) => {
+      if (expandedLogSessions.has(sessionId)) {
+        setExpandedLogSessions((current) => {
+          const next = new Set(current);
+          next.delete(sessionId);
+          return next;
+        });
+        return;
+      }
+
+      if (!sessionLogsCache[sessionId]) {
+        setLoadingLogsFor(sessionId);
+        const { data, error } = await supabase
+          .from("session_daily_logs")
+          .select("*")
+          .eq("session_id", sessionId)
+          .order("log_date", { ascending: false });
+
+        if (error) {
+          setActionError(error.message);
+          setLoadingLogsFor(null);
+          return;
+        }
+
+        setSessionLogsCache((current) => ({
+          ...current,
+          [sessionId]: (data ?? []) as DailyLog[],
+        }));
+        setLoadingLogsFor(null);
+      }
+
+      setExpandedLogSessions((current) => new Set(current).add(sessionId));
+    },
+    [expandedLogSessions, sessionLogsCache],
+  );
+
+  if (fetchError && isLoading) {
+    return (
+      <main className="mx-auto w-full max-w-7xl flex-1 p-6 sm:p-10">
+        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
+          Planning Sessions
+        </h1>
+        <p className="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
+          Failed to load planning data: {fetchError}
+        </p>
+      </main>
+    );
+  }
+
+  return (
+    <main className="mx-auto w-full max-w-7xl flex-1 space-y-8 p-6 sm:p-10">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
+          Planning Sessions
+        </h1>
+        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+          Manage 14-day planning sessions and track PPC performance.
+        </p>
+      </div>
+
+      {fetchError && (
+        <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
+          {fetchError}
+        </p>
+      )}
+
+      {actionError && (
+        <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
+          {actionError}
+        </p>
+      )}
+
+      {isLoading ? (
+        <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-12 text-center text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-400">
+          Loading planning session...
+        </div>
+      ) : activeSession ? (
+        <>
+          <section className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+                  Active Planning Session
+                </h2>
+                <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+                  {formatDate(activeSession.start_date)} —{" "}
+                  {formatDate(activeSession.end_date)}
+                </p>
+                <p className="mt-1 text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  {daysRemaining} day{daysRemaining === 1 ? "" : "s"} remaining
+                </p>
+              </div>
+              <PpcBadge ppc={livePpc} />
+            </div>
+          </section>
+
+          <section className="rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+            <div className="border-b border-zinc-200 px-6 py-4 dark:border-zinc-800">
+              <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+                Committed Activities
+              </h2>
+              <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+                {sessionActivities.length} activit
+                {sessionActivities.length === 1 ? "y" : "ies"} in this session
+              </p>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-zinc-200 text-left text-sm dark:divide-zinc-800">
+                <thead className="bg-zinc-50 dark:bg-zinc-900/60">
+                  <tr>
+                    <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+                      Activity ID
+                    </th>
+                    <th className="min-w-[12rem] px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+                      Activity Name
+                    </th>
+                    <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+                      Planned Finish
+                    </th>
+                    <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+                      Status
+                    </th>
+                    <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+                      Action
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-200 bg-white dark:divide-zinc-800 dark:bg-zinc-950">
+                  {sessionActivities.map((row) => (
+                    <tr
+                      key={row.id}
+                      className="hover:bg-zinc-50 dark:hover:bg-zinc-900/40"
+                    >
+                      <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-zinc-700 dark:text-zinc-300">
+                        {row.activity_id}
+                      </td>
+                      <td className="px-4 py-3 font-medium text-zinc-900 dark:text-zinc-100">
+                        {row.activities?.activity_name ?? "—"}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-zinc-700 dark:text-zinc-300">
+                        {formatDate(row.activities?.finish_date ?? null)}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3">
+                        <StatusBadge status={row.activities?.status ?? null} />
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3">
+                        {(() => {
+                          const status = row.activities?.status ?? null;
+                          const category = getStatusCategory(status);
+                          const isActionLoading = actionActivityId === row.id;
+
+                          if (
+                            row.was_completed ||
+                            category === "completed"
+                          ) {
+                            return (
+                              <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-800 ring-1 ring-inset ring-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-200 dark:ring-emerald-900">
+                                Completed
+                              </span>
+                            );
+                          }
+
+                          if (category === "in_progress") {
+                            return (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  void handleMarkComplete(
+                                    row.id,
+                                    row.activity_id,
+                                  )
+                                }
+                                disabled={isActionLoading}
+                                className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-blue-500 dark:hover:bg-blue-400"
+                              >
+                                {isActionLoading
+                                  ? "Saving..."
+                                  : "Mark Complete"}
+                              </button>
+                            );
+                          }
+
+                          return (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                void handleMarkInProgress(
+                                  row.id,
+                                  row.activity_id,
+                                )
+                              }
+                              disabled={isActionLoading}
+                              className="rounded-md border border-zinc-300 bg-zinc-100 px-3 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                            >
+                              {isActionLoading
+                                ? "Saving..."
+                                : "Mark In Progress"}
+                            </button>
+                          );
+                        })()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="border-t border-zinc-200 px-6 py-4 dark:border-zinc-800">
+              {showCloseConfirm ? (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-4 dark:border-amber-900/50 dark:bg-amber-950/30">
+                  <p className="text-sm text-amber-900 dark:text-amber-200">
+                    Close this session? PPC will be recorded as{" "}
+                    {livePpc.toFixed(1)}%
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void handleCloseSession()}
+                      disabled={isClosing}
+                      className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+                    >
+                      {isClosing ? "Closing..." : "Confirm Close"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowCloseConfirm(false)}
+                      disabled={isClosing}
+                      className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="relative inline-block">
+                  <button
+                    type="button"
+                    onClick={() => setShowCloseConfirm(true)}
+                    disabled={!allActivitiesCompleted || isClosing}
+                    title={
+                      !allActivitiesCompleted
+                        ? "All activities must be completed before closing"
+                        : undefined
+                    }
+                    className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-blue-500 dark:hover:bg-blue-400"
+                  >
+                    Close Session
+                  </button>
+                  {!allActivitiesCompleted && (
+                    <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+                      All activities must be completed before closing
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          </section>
+
+          <section className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+            <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+              Daily Log
+            </h2>
+
+            <div className="mt-4 grid gap-4 rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900/40 sm:grid-cols-2">
+              <div>
+                <label
+                  htmlFor="log-date"
+                  className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                >
+                  Date
+                </label>
+                <input
+                  id="log-date"
+                  type="date"
+                  value={logDate}
+                  onChange={(event) => setLogDate(event.target.value)}
+                  className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor="logged-by"
+                  className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                >
+                  Logged by
+                </label>
+                <input
+                  id="logged-by"
+                  type="text"
+                  value={loggedBy}
+                  onChange={(event) => setLoggedBy(event.target.value)}
+                  placeholder="Your name"
+                  className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label
+                  htmlFor="log-note"
+                  className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                >
+                  Note
+                </label>
+                <textarea
+                  id="log-note"
+                  value={logNote}
+                  onChange={(event) => setLogNote(event.target.value)}
+                  rows={3}
+                  required
+                  placeholder="What happened on site today?"
+                  className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <button
+                  type="button"
+                  onClick={() => void handleAddLog()}
+                  disabled={isAddingLog || !logNote.trim()}
+                  className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+                >
+                  {isAddingLog ? "Adding..." : "Add Log"}
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-6 space-y-3">
+              {dailyLogs.length === 0 ? (
+                <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                  No daily logs yet for this session.
+                </p>
+              ) : (
+                dailyLogs.map((log) => (
+                  <div
+                    key={log.id}
+                    className="rounded-lg border border-zinc-200 bg-white px-4 py-3 dark:border-zinc-800 dark:bg-zinc-950"
+                  >
+                    <div className="flex flex-wrap items-center gap-2 text-sm">
+                      <span className="font-medium text-zinc-900 dark:text-zinc-100">
+                        {formatDate(log.log_date)}
+                      </span>
+                      {log.logged_by && (
+                        <span className="text-zinc-500 dark:text-zinc-400">
+                          · {log.logged_by}
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-2 text-sm text-zinc-700 dark:text-zinc-300">
+                      {log.note}
+                    </p>
+                  </div>
+                ))
+              )}
+            </div>
+          </section>
+        </>
+      ) : (
+        <section className="space-y-6">
+          <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-6 py-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/40">
+            <p className="text-sm text-zinc-700 dark:text-zinc-300">
+              No active planning session. Start a new 14-day session to begin
+              tracking PPC.
+            </p>
+          </div>
+
+          <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+            <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+              Start New Session
+            </h2>
+
+            <div className="mt-4 max-w-xs">
+              <label
+                htmlFor="session-start-date"
+                className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+              >
+                Start date
+              </label>
+              <input
+                id="session-start-date"
+                type="date"
+                min={minStartDate}
+                value={startDateInput}
+                onChange={(event) =>
+                  handleStartDateChange(event.target.value)
+                }
+                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+              />
+              <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+                {startDateHint}
+              </p>
+            </div>
+
+            <div className="mt-6">
+              {isPreviewLoading ? (
+                <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                  Loading activity preview...
+                </p>
+              ) : previewActivities.length === 0 ? (
+                <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
+                  No activities found in this date range. Try a different start
+                  date.
+                </p>
+              ) : (
+                <>
+                  <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                    {previewActivities.length} activit
+                    {previewActivities.length === 1 ? "y" : "ies"} will be
+                    committed to this session
+                  </p>
+                  <ul className="mt-3 max-h-48 space-y-1 overflow-y-auto rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm dark:border-zinc-800 dark:bg-zinc-900/40">
+                    {previewActivities.map((activity) => (
+                      <li
+                        key={activity.activity_id}
+                        className="text-zinc-700 dark:text-zinc-300"
+                      >
+                        <span className="font-mono text-xs">
+                          {activity.activity_id}
+                        </span>{" "}
+                        — {activity.activity_name}
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => void handleStartSession()}
+              disabled={
+                isStarting || isPreviewLoading || previewActivities.length === 0
+              }
+              className="mt-6 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-blue-500 dark:hover:bg-blue-400"
+            >
+              {isStarting ? "Starting..." : "Start Session"}
+            </button>
+          </div>
+        </section>
+      )}
+
+      <section className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+        <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+          PPC History
+        </h2>
+
+        {isLoading ? (
+          <p className="mt-4 text-sm text-zinc-600 dark:text-zinc-400">
+            Loading PPC history...
+          </p>
+        ) : closedSessions.length === 0 ? (
+          <p className="mt-4 text-sm text-zinc-600 dark:text-zinc-400">
+            No completed sessions yet. Close your first session to see PPC
+            history.
+          </p>
+        ) : (
+          <>
+            <div className="mt-6 h-72 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={chartData}
+                  margin={{ top: 8, right: 8, left: 0, bottom: 8 }}
+                >
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    className="stroke-zinc-200 dark:stroke-zinc-800"
+                  />
+                  <XAxis
+                    dataKey="label"
+                    tick={{ fontSize: 12 }}
+                    interval={0}
+                    angle={chartData.length > 3 ? -20 : 0}
+                    textAnchor={chartData.length > 3 ? "end" : "middle"}
+                    height={chartData.length > 3 ? 60 : 30}
+                  />
+                  <YAxis domain={[0, 100]} tick={{ fontSize: 12 }} />
+                  <Tooltip content={<PpcChartTooltip />} />
+                  <Bar dataKey="ppc" radius={[4, 4, 0, 0]}>
+                    {chartData.map((entry) => (
+                      <Cell
+                        key={entry.id}
+                        fill={getPpcColorClasses(entry.ppc).bar}
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div className="mt-8 overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
+              <table className="min-w-full divide-y divide-zinc-200 text-left text-sm dark:divide-zinc-800">
+                <thead className="bg-zinc-50 dark:bg-zinc-900/60">
+                  <tr>
+                    <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+                      Session Period
+                    </th>
+                    <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+                      Total
+                    </th>
+                    <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+                      Completed
+                    </th>
+                    <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+                      PPC %
+                    </th>
+                    <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+                      Closed Date
+                    </th>
+                    <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+                      Logs
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-200 bg-white dark:divide-zinc-800 dark:bg-zinc-950">
+                  {closedSessions.map((session) => {
+                    const activities = session.session_activities ?? [];
+                    const total = activities.length;
+                    const completed = activities.filter(
+                      (row) => row.was_completed,
+                    ).length;
+                    const ppc =
+                      session.ppc_score !== null &&
+                      session.ppc_score !== undefined
+                        ? Number(session.ppc_score)
+                        : calculatePpc(completed, total);
+                    const isExpanded = expandedLogSessions.has(session.id);
+                    const logs = sessionLogsCache[session.id] ?? [];
+
+                    return (
+                      <tr key={session.id} className="align-top">
+                        <td className="px-4 py-3 text-zinc-700 dark:text-zinc-300">
+                          {formatSessionRange(
+                            session.start_date,
+                            session.end_date,
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-zinc-700 dark:text-zinc-300">
+                          {total}
+                        </td>
+                        <td className="px-4 py-3 text-zinc-700 dark:text-zinc-300">
+                          {completed}
+                        </td>
+                        <td className="px-4 py-3">
+                          <PpcBadge ppc={ppc} />
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3 text-zinc-700 dark:text-zinc-300">
+                          {formatDateTime(session.closed_at)}
+                        </td>
+                        <td className="px-4 py-3">
+                          <button
+                            type="button"
+                            onClick={() => void toggleSessionLogs(session.id)}
+                            className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
+                          >
+                            {loadingLogsFor === session.id
+                              ? "Loading..."
+                              : isExpanded
+                                ? "Hide Logs"
+                                : "View Logs"}
+                          </button>
+                          {isExpanded && (
+                            <div className="mt-3 min-w-[16rem] space-y-2">
+                              {logs.length === 0 ? (
+                                <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                                  No logs for this session.
+                                </p>
+                              ) : (
+                                logs.map((log) => (
+                                  <div
+                                    key={log.id}
+                                    className="rounded border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs dark:border-zinc-800 dark:bg-zinc-900/40"
+                                  >
+                                    <p className="font-medium text-zinc-800 dark:text-zinc-200">
+                                      {formatDate(log.log_date)}
+                                      {log.logged_by
+                                        ? ` · ${log.logged_by}`
+                                        : ""}
+                                    </p>
+                                    <p className="mt-1 text-zinc-600 dark:text-zinc-400">
+                                      {log.note}
+                                    </p>
+                                  </div>
+                                ))
+                              )}
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+      </section>
+    </main>
+  );
+}

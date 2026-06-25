@@ -1,27 +1,33 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { RefreshCw } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import type { LookaheadActivity } from "@/lib/lookahead";
 
-const DEFAULT_LOOKAHEAD_DAYS = 14;
-const MIN_LOOKAHEAD_DAYS = 1;
-const MAX_LOOKAHEAD_DAYS = 99;
+type PlanningSession = {
+  id: string;
+  start_date: string;
+  end_date: string;
+  status: string;
+};
 
-type SortField = "start_date" | "finish_date";
-type SortDirection = "asc" | "desc";
+type SessionCommittedActivity = {
+  activity_id: string;
+  was_completed: boolean;
+  activity_name: string;
+  status: string | null;
+  finish_date: string | null;
+  wbs_code: string | null;
+  responsible_engineer: string | null;
+};
 
-function clampLookaheadDays(value: number): number {
-  if (Number.isNaN(value)) return DEFAULT_LOOKAHEAD_DAYS;
-  return Math.min(MAX_LOOKAHEAD_DAYS, Math.max(MIN_LOOKAHEAD_DAYS, value));
-}
+type StatusCategory = "not_started" | "in_progress" | "completed" | "other";
 
 function parseDateOnly(value: string | null): Date | null {
   if (!value) return null;
 
   const datePart = value.split("T")[0];
   const [year, month, day] = datePart.split("-").map(Number);
-
   if (!year || !month || !day) return null;
 
   const date = new Date(year, month - 1, day);
@@ -30,48 +36,11 @@ function parseDateOnly(value: string | null): Date | null {
   return date;
 }
 
-function startOfToday(): Date {
-  const now = new Date();
-  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
-}
-
-function addDays(date: Date, days: number): Date {
-  const result = new Date(date);
-  result.setDate(result.getDate() + days);
-  return result;
-}
-
-function isDateWithinRange(
-  value: string | null,
-  rangeStart: Date,
-  rangeEnd: Date,
-): boolean {
-  const date = parseDateOnly(value);
-  if (!date) return false;
-
-  return date >= rangeStart && date <= rangeEnd;
-}
-
-function isUpcomingActivity(
-  activity: LookaheadActivity,
-  rangeStart: Date,
-  rangeEnd: Date,
-): boolean {
-  return (
-    isDateWithinRange(activity.start_date, rangeStart, rangeEnd) ||
-    isDateWithinRange(activity.finish_date, rangeStart, rangeEnd)
-  );
-}
-
 function formatDate(value: string | null): string {
   if (!value) return "—";
 
-  const datePart = value.split("T")[0];
-  const [year, month, day] = datePart.split("-").map(Number);
-  if (!year || !month || !day) return value;
-
-  const date = new Date(year, month - 1, day);
-  if (Number.isNaN(date.getTime())) return value;
+  const date = parseDateOnly(value);
+  if (!date) return value;
 
   return new Intl.DateTimeFormat("en-US", {
     year: "numeric",
@@ -80,24 +49,11 @@ function formatDate(value: string | null): string {
   }).format(date);
 }
 
-function formatDuration(value: number | string | null): string {
-  if (value === null || value === "") return "—";
-  return String(value);
-}
-
-function parseSortableDate(value: string | null): number {
-  if (!value) return Number.POSITIVE_INFINITY;
-
-  const datePart = value.split("T")[0];
-  const [year, month, day] = datePart.split("-").map(Number);
-  if (!year || !month || !day) return Number.POSITIVE_INFINITY;
-
-  return new Date(year, month - 1, day).getTime();
-}
-
-type StatusCategory = "not_started" | "in_progress" | "completed" | "other";
-
-function getStatusCategory(status: string | null): StatusCategory {
+function getStatusCategory(
+  status: string | null,
+  wasCompleted: boolean,
+): StatusCategory {
+  if (wasCompleted) return "completed";
   if (!status) return "other";
 
   const normalized = status.toLowerCase().trim();
@@ -125,10 +81,7 @@ function getStatusCategory(status: string | null): StatusCategory {
   return "other";
 }
 
-function getStatusLabel(status: string | null): string {
-  if (!status) return "Unknown";
-
-  const category = getStatusCategory(status);
+function getStatusLabel(category: StatusCategory, status: string | null): string {
   switch (category) {
     case "not_started":
       return "Not Started";
@@ -137,13 +90,19 @@ function getStatusLabel(status: string | null): string {
     case "completed":
       return "Completed";
     default:
-      return status;
+      return status ?? "Unknown";
   }
 }
 
-function StatusBadge({ status }: { status: string | null }) {
-  const category = getStatusCategory(status);
-  const label = getStatusLabel(status);
+function StatusBadge({
+  status,
+  wasCompleted,
+}: {
+  status: string | null;
+  wasCompleted: boolean;
+}) {
+  const category = getStatusCategory(status, wasCompleted);
+  const label = getStatusLabel(category, status);
 
   const className =
     category === "not_started"
@@ -163,150 +122,195 @@ function StatusBadge({ status }: { status: string | null }) {
   );
 }
 
-function SortButton({
-  label,
-  field,
-  activeField,
-  direction,
-  onSort,
-}: {
-  label: string;
-  field: SortField;
-  activeField: SortField;
-  direction: SortDirection;
-  onSort: (field: SortField) => void;
-}) {
-  const isActive = activeField === field;
+function getCardBorderClass(category: StatusCategory): string {
+  switch (category) {
+    case "completed":
+      return "border-l-emerald-500 dark:border-l-emerald-400";
+    case "in_progress":
+      return "border-l-blue-500 dark:border-l-blue-400";
+    default:
+      return "border-l-zinc-400 dark:border-l-zinc-500";
+  }
+}
+
+function normalizeSessionActivity(
+  row: Record<string, unknown>,
+): SessionCommittedActivity | null {
+  const activities = row.activities;
+  const activity =
+    Array.isArray(activities) && activities.length > 0
+      ? (activities[0] as Record<string, unknown>)
+      : (activities as Record<string, unknown> | null);
+
+  if (!activity) return null;
+
+  return {
+    activity_id: String(row.activity_id),
+    was_completed: Boolean(row.was_completed),
+    activity_name: String(activity.activity_name ?? ""),
+    status: (activity.status as string | null) ?? null,
+    finish_date: (activity.finish_date as string | null) ?? null,
+    wbs_code: (activity.wbs_code as string | null) ?? null,
+    responsible_engineer:
+      (activity.responsible_engineer as string | null) ?? null,
+  };
+}
+
+function ActivityCard({ activity }: { activity: SessionCommittedActivity }) {
+  const category = getStatusCategory(activity.status, activity.was_completed);
+  const isCompleted = category === "completed";
+  const borderClass = getCardBorderClass(category);
 
   return (
-    <button
-      type="button"
-      onClick={() => onSort(field)}
-      className={`inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-        isActive
-          ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
-          : "bg-white text-zinc-700 ring-1 ring-zinc-200 hover:bg-zinc-50 dark:bg-zinc-950 dark:text-zinc-200 dark:ring-zinc-700 dark:hover:bg-zinc-900"
+    <article
+      className={`rounded-xl border border-zinc-200 border-l-4 bg-white p-4 shadow-sm transition-colors dark:border-zinc-800 dark:bg-zinc-950 ${borderClass} ${
+        isCompleted ? "opacity-75" : ""
       }`}
     >
-      {label}
-      {isActive && <span aria-hidden="true">{direction === "asc" ? "↑" : "↓"}</span>}
-    </button>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 flex-1 space-y-1">
+          <p className="font-mono text-xs text-zinc-500 dark:text-zinc-400">
+            {activity.activity_id}
+          </p>
+          <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
+            {activity.activity_name}
+          </h3>
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+            WBS: {activity.wbs_code ?? "—"}
+          </p>
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+            Engineer: {activity.responsible_engineer ?? "—"}
+          </p>
+        </div>
+
+        <div className="flex shrink-0 flex-col items-start gap-3 sm:items-end">
+          <div className="text-left sm:text-right">
+            <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+              Planned Finish
+            </p>
+            <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+              {formatDate(activity.finish_date)}
+            </p>
+          </div>
+
+          <StatusBadge
+            status={activity.status}
+            wasCompleted={activity.was_completed}
+          />
+        </div>
+      </div>
+    </article>
   );
 }
 
 export default function LookaheadPage() {
-  const [activities, setActivities] = useState<LookaheadActivity[]>([]);
+  const [activeSession, setActiveSession] = useState<PlanningSession | null>(
+    null,
+  );
+  const [activities, setActivities] = useState<SessionCommittedActivity[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
-  const [lookaheadDays, setLookaheadDays] = useState(DEFAULT_LOOKAHEAD_DAYS);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [sortField, setSortField] = useState<SortField>("start_date");
-  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
 
   useEffect(() => {
-    document.title = "Look Ahead Planner";
+    document.title = "Look Ahead";
   }, []);
 
-  useEffect(() => {
-    let isMounted = true;
-
-    async function loadActivities() {
+  const loadData = useCallback(async (options?: { isRefresh?: boolean }) => {
+    if (options?.isRefresh) {
+      setIsRefreshing(true);
+    } else {
       setIsLoading(true);
-      setFetchError(null);
+    }
+    setFetchError(null);
 
-      const { data, error } = await supabase
-        .from("activities")
-        .select(
-          "activity_id, activity_name, status, wbs_code, start_date, finish_date, duration",
-        )
-        .order("start_date", { ascending: true, nullsFirst: false });
+    const { data: sessionData, error: sessionError } = await supabase
+      .from("planning_sessions")
+      .select("id, start_date, end_date, status")
+      .eq("status", "active")
+      .limit(1)
+      .maybeSingle();
 
-      if (!isMounted) return;
-
-      if (error) {
-        setFetchError(error.message);
-        setActivities([]);
-      } else {
-        setActivities((data ?? []) as LookaheadActivity[]);
-      }
-
+    if (sessionError) {
+      setFetchError(sessionError.message);
+      setActiveSession(null);
+      setActivities([]);
       setIsLoading(false);
+      setIsRefreshing(false);
+      return;
     }
 
-    void loadActivities();
+    const session = sessionData as PlanningSession | null;
+    setActiveSession(session);
 
-    return () => {
-      isMounted = false;
-    };
+    if (!session) {
+      setActivities([]);
+      setIsLoading(false);
+      setIsRefreshing(false);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("session_activities")
+      .select(
+        `
+        activity_id,
+        was_completed,
+        activities (
+          activity_name,
+          status,
+          finish_date,
+          wbs_code,
+          responsible_engineer
+        )
+      `,
+      )
+      .eq("session_id", session.id);
+
+    if (error) {
+      setFetchError(error.message);
+      setActivities([]);
+    } else {
+      const normalized = (data ?? [])
+        .map((row) => normalizeSessionActivity(row as Record<string, unknown>))
+        .filter((row): row is SessionCommittedActivity => row !== null)
+        .sort((left, right) => {
+          const leftDate = parseDateOnly(left.finish_date);
+          const rightDate = parseDateOnly(right.finish_date);
+
+          if (!leftDate && !rightDate) {
+            return left.activity_id.localeCompare(right.activity_id);
+          }
+          if (!leftDate) return 1;
+          if (!rightDate) return -1;
+
+          return leftDate.getTime() - rightDate.getTime();
+        });
+
+      setActivities(normalized);
+    }
+
+    setIsLoading(false);
+    setIsRefreshing(false);
   }, []);
 
-  const upcomingActivities = useMemo(() => {
-    const today = startOfToday();
-    const horizonEnd = addDays(today, lookaheadDays);
+  useEffect(() => {
+    void loadData();
+  }, [loadData]);
 
-    return activities.filter((activity) =>
-      isUpcomingActivity(activity, today, horizonEnd),
-    );
-  }, [activities, lookaheadDays]);
+  const remainingCount = useMemo(
+    () => activities.filter((activity) => !activity.was_completed).length,
+    [activities],
+  );
 
-  const filteredActivities = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
-    if (!query) return upcomingActivities;
-
-    return upcomingActivities.filter((activity) => {
-      const activityId = activity.activity_id.toLowerCase();
-      const activityName = (activity.activity_name ?? "").toLowerCase();
-      return activityId.includes(query) || activityName.includes(query);
-    });
-  }, [searchQuery, upcomingActivities]);
-
-  const sortedActivities = useMemo(() => {
-    const sorted = [...filteredActivities];
-
-    sorted.sort((left, right) => {
-      const leftValue = parseSortableDate(left[sortField]);
-      const rightValue = parseSortableDate(right[sortField]);
-      const comparison = leftValue - rightValue;
-      return sortDirection === "asc" ? comparison : -comparison;
-    });
-
-    return sorted;
-  }, [filteredActivities, sortDirection, sortField]);
-
-  const handleLookaheadDaysChange = (
-    event: React.ChangeEvent<HTMLInputElement>,
-  ) => {
-    const { value } = event.target;
-
-    if (value === "") {
-      setLookaheadDays(MIN_LOOKAHEAD_DAYS);
-      return;
-    }
-
-    const parsed = Number.parseInt(value, 10);
-    if (Number.isNaN(parsed)) return;
-
-    setLookaheadDays(clampLookaheadDays(parsed));
-  };
-
-  const handleSort = (field: SortField) => {
-    if (sortField === field) {
-      setSortDirection((current) => (current === "asc" ? "desc" : "asc"));
-      return;
-    }
-
-    setSortField(field);
-    setSortDirection("asc");
-  };
-
-  if (fetchError) {
+  if (fetchError && isLoading) {
     return (
       <main className="mx-auto w-full max-w-7xl flex-1 p-6 sm:p-10">
         <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
-          Look Ahead Planner
+          Look Ahead
         </h1>
         <p className="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
-          Failed to load activities: {fetchError}
+          Failed to load look ahead data: {fetchError}
         </p>
       </main>
     );
@@ -316,162 +320,90 @@ export default function LookaheadPage() {
     <main className="mx-auto w-full max-w-7xl flex-1 p-6 sm:p-10">
       <div className="mb-8">
         <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
-          Look Ahead Planner
+          Look Ahead
         </h1>
-        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-          Construction schedule overview for the next {lookaheadDays} days.
+
+        {activeSession && !isLoading && (
+          <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+            Active session: {formatDate(activeSession.start_date)} →{" "}
+            {formatDate(activeSession.end_date)}
+          </p>
+        )}
+
+        {!activeSession && !isLoading && (
+          <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+            Activities from the active planning session appear here.
+          </p>
+        )}
+      </div>
+
+      {fetchError && (
+        <p className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
+          {fetchError}
         </p>
-
-        <div className="mt-4 flex items-center gap-2">
-          <label
-            htmlFor="lookahead-days"
-            className="text-sm font-medium text-zinc-700 dark:text-zinc-300"
-          >
-            Look Ahead Days
-          </label>
-          <input
-            id="lookahead-days"
-            type="number"
-            inputMode="numeric"
-            value={lookaheadDays}
-            onChange={handleLookaheadDaysChange}
-            className="w-16 rounded-md border border-zinc-300 bg-white px-2 py-1 text-center text-sm text-zinc-900 shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
-          />
-        </div>
-      </div>
-
-      <div className="mb-8 grid gap-4 sm:grid-cols-2">
-        <div className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
-          <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
-            Total Activities
-          </p>
-          <p className="mt-2 text-3xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
-            {isLoading ? "—" : activities.length.toLocaleString()}
-          </p>
-        </div>
-
-        <div className="rounded-xl border border-blue-200 bg-blue-50 p-5 shadow-sm dark:border-blue-900/50 dark:bg-blue-950/30">
-          <p className="text-sm font-medium text-blue-700 dark:text-blue-300">
-            Upcoming Activities ({lookaheadDays} Days)
-          </p>
-          <p className="mt-2 text-3xl font-bold tracking-tight text-blue-900 dark:text-blue-100">
-            {isLoading ? "—" : upcomingActivities.length.toLocaleString()}
-          </p>
-        </div>
-      </div>
-
-      <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div className="w-full lg:max-w-md">
-          <label
-            htmlFor="activity-search"
-            className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
-          >
-            Search activities
-          </label>
-          <input
-            id="activity-search"
-            type="search"
-            value={searchQuery}
-            onChange={(event) => setSearchQuery(event.target.value)}
-            placeholder="Search by Activity ID or Activity Name"
-            disabled={isLoading}
-            className="w-full rounded-lg border border-zinc-300 bg-white px-4 py-2.5 text-sm text-zinc-900 shadow-sm outline-none ring-blue-500 placeholder:text-zinc-400 focus:border-blue-500 focus:ring-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-500"
-          />
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm font-medium text-zinc-600 dark:text-zinc-400">
-            Sort by:
-          </span>
-          <SortButton
-            label="Start Date"
-            field="start_date"
-            activeField={sortField}
-            direction={sortDirection}
-            onSort={handleSort}
-          />
-          <SortButton
-            label="Finish Date"
-            field="finish_date"
-            activeField={sortField}
-            direction={sortDirection}
-            onSort={handleSort}
-          />
-        </div>
-      </div>
+      )}
 
       {isLoading ? (
-        <p className="rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-8 text-center text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-400">
-          Loading activities...
-        </p>
-      ) : upcomingActivities.length === 0 ? (
-        <p className="rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-8 text-center text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-400">
-          No upcoming activities in the next {lookaheadDays} days.
-        </p>
-      ) : sortedActivities.length === 0 ? (
-        <p className="rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-8 text-center text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-400">
-          No activities match your search.
-        </p>
-      ) : (
-        <div className="overflow-x-auto rounded-xl border border-zinc-200 shadow-sm dark:border-zinc-800">
-          <table className="min-w-full divide-y divide-zinc-200 text-left text-sm dark:divide-zinc-800">
-            <thead className="bg-zinc-50 dark:bg-zinc-900/60">
-              <tr>
-                <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
-                  Activity ID
-                </th>
-                <th className="min-w-[12rem] px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
-                  Activity Name
-                </th>
-                <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
-                  Status
-                </th>
-                <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
-                  WBS Code
-                </th>
-                <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
-                  Start Date
-                </th>
-                <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
-                  Finish Date
-                </th>
-                <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
-                  Duration
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-200 bg-white dark:divide-zinc-800 dark:bg-zinc-950">
-              {sortedActivities.map((activity) => (
-                <tr
-                  key={activity.activity_id}
-                  className="transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-900/40"
-                >
-                  <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-zinc-700 dark:text-zinc-300">
-                    {activity.activity_id}
-                  </td>
-                  <td className="px-4 py-3 font-medium text-zinc-900 dark:text-zinc-100">
-                    {activity.activity_name}
-                  </td>
-                  <td className="whitespace-nowrap px-4 py-3">
-                    <StatusBadge status={activity.status} />
-                  </td>
-                  <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-zinc-700 dark:text-zinc-300">
-                    {activity.wbs_code ?? "—"}
-                  </td>
-                  <td className="whitespace-nowrap px-4 py-3 text-zinc-700 dark:text-zinc-300">
-                    {formatDate(activity.start_date)}
-                  </td>
-                  <td className="whitespace-nowrap px-4 py-3 text-zinc-700 dark:text-zinc-300">
-                    {formatDate(activity.finish_date)}
-                  </td>
-                  <td className="whitespace-nowrap px-4 py-3 text-zinc-700 dark:text-zinc-300">
-                    {formatDuration(activity.duration)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-12 text-center text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-400">
+          Loading look ahead data...
         </div>
+      ) : !activeSession ? (
+        <div className="mx-auto max-w-lg rounded-xl border border-zinc-200 bg-white px-8 py-12 text-center shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+          <p className="text-sm text-zinc-700 dark:text-zinc-300">
+            No tasks scheduled for this week. Check back later or ask your
+            supervisor for the latest work plan.
+          </p>
+        </div>
+      ) : (
+        <>
+          <div className="mb-8 grid gap-4 sm:grid-cols-2">
+            <div className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+              <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
+                Total Activities
+              </p>
+              <p className="mt-2 text-3xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
+                {activities.length.toLocaleString()}
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-blue-200 bg-blue-50 p-5 shadow-sm dark:border-blue-900/50 dark:bg-blue-950/30">
+              <p className="text-sm font-medium text-blue-700 dark:text-blue-300">
+                Remaining Activities
+              </p>
+              <p className="mt-2 text-3xl font-bold tracking-tight text-blue-900 dark:text-blue-100">
+                {remainingCount.toLocaleString()}
+              </p>
+            </div>
+          </div>
+
+          <div className="mb-4 flex justify-end">
+            <button
+              type="button"
+              onClick={() => void loadData({ isRefresh: true })}
+              disabled={isRefreshing}
+              className="inline-flex items-center justify-center gap-2 rounded-lg border border-zinc-300 bg-white px-4 py-2.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
+            >
+              <RefreshCw
+                className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`}
+                aria-hidden="true"
+              />
+              {isRefreshing ? "Refreshing..." : "Refresh"}
+            </button>
+          </div>
+
+          {activities.length === 0 ? (
+            <p className="rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-8 text-center text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-400">
+              No tasks assigned yet. Ask your supervisor to update the weekly
+              work plan.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {activities.map((activity) => (
+                <ActivityCard key={activity.activity_id} activity={activity} />
+              ))}
+            </div>
+          )}
+        </>
       )}
     </main>
   );

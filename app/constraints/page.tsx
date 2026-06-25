@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
 const CONSTRAINT_TYPES = [
@@ -50,6 +50,14 @@ const EMPTY_FORM: ConstraintFormState = {
   raised_by: "",
   remarks: "",
 };
+
+type ActivityOption = {
+  activity_id: string;
+  activity_name: string;
+};
+
+const ACTIVITY_FIELD_INPUT_CLASS =
+  "w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100";
 
 function formatDate(value: string | null): string {
   if (!value) return "—";
@@ -152,6 +160,211 @@ function FilterButton({
   );
 }
 
+function formatActivityOption(option: ActivityOption): string {
+  return `${option.activity_id} — ${option.activity_name}`;
+}
+
+function ActivityIdField({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: string;
+  onChange: (activityId: string) => void;
+  disabled: boolean;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [activities, setActivities] = useState<ActivityOption[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [isOpen, setIsOpen] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadActivities() {
+      setIsLoading(true);
+      setLoadError(null);
+
+      const { data, error } = await supabase
+        .from("activities")
+        .select("activity_id, activity_name")
+        .order("activity_id", { ascending: true });
+
+      if (!isMounted) return;
+
+      if (error) {
+        setLoadError(error.message);
+        setActivities([]);
+      } else {
+        setActivities((data ?? []) as ActivityOption[]);
+      }
+
+      setIsLoading(false);
+    }
+
+    void loadActivities();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    function handlePointerDown(event: MouseEvent) {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(event.target as Node)
+      ) {
+        setIsOpen(false);
+        setQuery("");
+      }
+    }
+
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, []);
+
+  const selectedActivity = useMemo(
+    () => activities.find((activity) => activity.activity_id === value),
+    [activities, value],
+  );
+
+  const filteredActivities = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    if (!normalizedQuery) return activities;
+
+    return activities.filter((activity) => {
+      const activityId = activity.activity_id.toLowerCase();
+      const activityName = activity.activity_name.toLowerCase();
+      return (
+        activityId.includes(normalizedQuery) ||
+        activityName.includes(normalizedQuery)
+      );
+    });
+  }, [activities, query]);
+
+  const displayValue = isOpen
+    ? query
+    : selectedActivity
+      ? formatActivityOption(selectedActivity)
+      : value;
+
+  const handleSelect = (activityId: string) => {
+    onChange(activityId);
+    setQuery("");
+    setIsOpen(false);
+  };
+
+  return (
+    <div>
+      <label
+        htmlFor="constraint-activity-id"
+        className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+      >
+        Activity ID
+      </label>
+
+      {loadError ? (
+        <>
+          <input
+            id="constraint-activity-id"
+            type="text"
+            value={value}
+            disabled={disabled}
+            onChange={(event) => onChange(event.target.value)}
+            placeholder="Optional"
+            className={ACTIVITY_FIELD_INPUT_CLASS}
+          />
+          <p className="mt-1.5 text-xs text-amber-700 dark:text-amber-300">
+            Could not load activities. You can type an Activity ID manually.
+          </p>
+        </>
+      ) : (
+        <div ref={containerRef} className="relative">
+          <input
+            id="constraint-activity-id"
+            type="text"
+            role="combobox"
+            aria-expanded={isOpen}
+            aria-autocomplete="list"
+            aria-controls="constraint-activity-listbox"
+            value={displayValue}
+            disabled={disabled || isLoading}
+            placeholder={
+              isLoading
+                ? "Loading activities..."
+                : "Search by Activity ID or Name"
+            }
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setIsOpen(true);
+              if (!event.target.value.trim()) {
+                onChange("");
+              }
+            }}
+            onFocus={() => {
+              if (!isLoading) {
+                setIsOpen(true);
+                setQuery(
+                  selectedActivity
+                    ? formatActivityOption(selectedActivity)
+                    : value,
+                );
+              }
+            }}
+            className={ACTIVITY_FIELD_INPUT_CLASS}
+          />
+
+          {isOpen && !isLoading && (
+            <ul
+              id="constraint-activity-listbox"
+              role="listbox"
+              className="absolute z-20 mt-1 max-h-48 w-full overflow-y-auto rounded-lg border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
+            >
+              <li>
+                <button
+                  type="button"
+                  role="option"
+                  onClick={() => handleSelect("")}
+                  className="w-full px-3 py-2 text-left text-sm text-zinc-600 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                >
+                  No activity link
+                </button>
+              </li>
+
+              {filteredActivities.length === 0 ? (
+                <li className="px-3 py-2 text-sm text-zinc-500 dark:text-zinc-400">
+                  No matching activities
+                </li>
+              ) : (
+                filteredActivities.map((activity) => (
+                  <li key={activity.activity_id}>
+                    <button
+                      type="button"
+                      role="option"
+                      aria-selected={value === activity.activity_id}
+                      onClick={() => handleSelect(activity.activity_id)}
+                      className={`w-full px-3 py-2 text-left text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800 ${
+                        value === activity.activity_id
+                          ? "bg-blue-50 font-medium text-blue-900 dark:bg-blue-950/40 dark:text-blue-100"
+                          : "text-zinc-900 dark:text-zinc-100"
+                      }`}
+                    >
+                      {formatActivityOption(activity)}
+                    </button>
+                  </li>
+                ))
+              )}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ConstraintModal({
   mode,
   form,
@@ -206,23 +419,11 @@ function ConstraintModal({
         </h2>
 
         <div className="mt-5 space-y-4">
-          <div>
-            <label
-              htmlFor="constraint-activity-id"
-              className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
-            >
-              Activity ID
-            </label>
-            <input
-              id="constraint-activity-id"
-              type="text"
-              value={form.activity_id}
-              disabled={isSaving}
-              onChange={(event) => onChange({ activity_id: event.target.value })}
-              placeholder="Optional"
-              className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
-            />
-          </div>
+          <ActivityIdField
+            value={form.activity_id}
+            disabled={isSaving}
+            onChange={(activityId) => onChange({ activity_id: activityId })}
+          />
 
           <div>
             <label

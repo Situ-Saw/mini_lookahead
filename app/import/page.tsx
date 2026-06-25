@@ -183,8 +183,6 @@ export default function ImportPage() {
 
     try {
       const rows = await parseExcelFile(selectedFile);
-      ("Parsed Primavera activity rows:", rows);
-      ("Parsed row count:", rows.length);
       setParsedRows(rows);
     } catch (importError) {
       const message =
