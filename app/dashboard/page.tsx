@@ -44,8 +44,6 @@ type ActivityRow = {
   status: string | null;
   start_date: string | null;
   finish_date: string | null;
-  act_start_date: string | null;
-  act_end_date: string | null;
   delay_days: number | null;
   is_baseline: boolean | null;
 };
@@ -163,15 +161,15 @@ function getPpcInterpretation(ppc: number): string {
 }
 
 function isCompleted(activity: ActivityRow): boolean {
-  return activity.status === "Completed" || activity.act_end_date !== null;
+  return activity.status === "Completed";
 }
 
 function isInProgress(activity: ActivityRow): boolean {
-  return activity.act_start_date !== null && activity.act_end_date === null;
+  return activity.status === "In Progress";
 }
 
 function isNotStarted(activity: ActivityRow): boolean {
-  return activity.act_start_date === null && activity.status !== "Completed";
+  return activity.status === "Not Started";
 }
 
 function computeStats(
@@ -547,7 +545,7 @@ export default function DashboardPage() {
       supabase
         .from("activities")
         .select(
-          "status, start_date, finish_date, act_start_date, act_end_date, delay_days, is_baseline",
+          "status, start_date, finish_date, delay_days, is_baseline",
         ),
       supabase.from("constraints").select("status"),
     ]);
