@@ -1,36 +1,115 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Look Ahead Planner
 
-## Getting Started
+A construction look-ahead planning tool for site engineers,
+built as part of an assignment on lean construction planning.
 
-First, run the development server:
+## What it does
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+- Import activities from Primavera P6 Excel export
+- View and filter all project activities
+- Filter upcoming activities by look-ahead window (1–99 days)
+- Track constraints against activities
+- Calculate project delays from actual vs planned dates
+- Show PPC and projected end date on the dashboard
+- Manage 14-day planning sessions with daily logs
+- Track PPC reliability per session with history chart
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Tech stack
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- Next.js 16 (App Router)
+- TypeScript
+- Supabase (PostgreSQL)
+- Tailwind CSS
+- SheetJS (Excel parsing)
+- Lucide React (icons)
+- Recharts (PPC history chart)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Setup
 
-## Learn More
+1. Clone the repository
+2. Copy `.env.example` to `.env.local` and fill in your Supabase values
+3. Run `schema.sql` in your Supabase SQL Editor
+4. Install dependencies:
+   npm install
+5. Start the development server:
+   npm run dev
+6. Open http://localhost:3000
 
-To learn more about Next.js, take a look at the following resources:
+## Database schema
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+See `schema.sql` in the project root.
+Run it once in Supabase SQL Editor to create all tables,
+enable Row Level Security, and set up policies.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Environment variables
 
-## Deploy on Vercel
+See `.env.example` for required variables:
+- NEXT_PUBLIC_SUPABASE_URL
+- NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Importing data
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Two import modes are supported:
+
+**Baseline import**
+Done once, locks the original planned schedule.
+Cannot be re-imported once set.
+
+**Progress update**
+Imports actual start and finish dates from Primavera.
+Recalculates progress % and delay days automatically.
+
+## Planning sessions
+
+A planning session covers a 14-day window.
+Activities whose finish_date falls within the window
+are automatically committed to the session.
+
+A session closes when all committed activities are completed.
+It can close before 14 days if activities finish early.
+
+PPC per session:
+  PPC = (completed activities) / (committed activities) x 100
+
+Daily logs can be added each day within a session to record
+reasons for delays such as public holidays or material issues.
+
+Only one active session is supported at a time.
+Multiple project support is planned for a future version.
+
+## PPC history
+
+Each closed session stores its PPC score.
+The planning page shows a chart of PPC scores over time
+so clients and admins can track planning reliability trends.
+
+## Assumptions
+
+- Excel file must be a Primavera P6 export in standard column format
+- Baseline import can only be done once per project
+- Progress % is derived from actual vs planned duration
+- PPC is measured per 14-day planning session, not overall completion
+- Role-based access control is planned for a future version
+- Authentication is planned for a future version
+
+## Known limitations
+
+- No authentication yet (planned for Assignment 2)
+- Mobile view requires further optimization
+- Multiple concurrent sessions not yet supported
+
+## Project structure
+
+app/
+  dashboard/     → Project dashboard with PPC and timeline
+  activities/    → Activity master with delay analysis
+  lookahead/     → Upcoming activities filter
+  import/        → Excel import (baseline and progress update)
+  constraints/   → Constraint register and tracking
+  planning/      → 14-day planning sessions and PPC history
+  api/           → Server-side API routes
+lib/
+  supabase.ts          → Supabase client
+  primavera-import.ts  → Excel parsing and activity mapping
+schema.sql       → Database schema and RLS policies
+.env.example     → Environment variable template
