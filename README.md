@@ -113,3 +113,131 @@ lib/
   primavera-import.ts  → Excel parsing and activity mapping
 schema.sql       → Database schema and RLS policies
 .env.example     → Environment variable template
+
+
+
+
+## Entity Relationship Diagram For Part 2
+
+### Layer 1 — Users and Projects
+
+```
+PROFILES ||--o{ PROJECT_MEMBERS : "belongs to"
+PROJECTS ||--o{ PROJECT_MEMBERS : "has members"
+PROFILES ||--o{ PROJECTS : "creates"
+
+PROFILES {
+  uuid    id          PK
+  text    name
+  text    email
+  text    global_role
+  timestamp created_at
+}
+
+PROJECTS {
+  uuid    id          PK
+  text    name
+  uuid    created_by  FK → profiles.id
+  timestamp created_at
+}
+
+PROJECT_MEMBERS {
+  uuid    id          PK
+  uuid    project_id  FK → projects.id
+  uuid    user_id     FK → profiles.id
+  text    role
+  timestamp joined_at
+}
+```
+
+> One user can be a Planner on Project BSL and a Viewer on another project simultaneously.
+> Role is enforced per project, not globally.
+
+---
+
+### Layer 2 — Core Data
+
+```
+PROJECTS       ||--o{ ACTIVITIES         : "contains"
+PROJECTS       ||--o{ CONSTRAINTS        : "contains"
+PROJECTS       ||--o{ WEEKLY_COMMITMENTS : "has"
+ACTIVITIES     ||--o{ CONSTRAINTS        : "has"
+ACTIVITIES     ||--o{ WEEKLY_COMMITMENTS : "committed in"
+ACTIVITIES     ||--o{ ACTIVITY_HISTORY   : "tracked by"
+
+ACTIVITIES {
+  uuid     id              PK
+  uuid     project_id      FK → projects.id
+  text     activity_id
+  text     activity_name
+  uuid     assigned_to     FK → profiles.id
+  text     status
+  integer  progress
+  date     start_date
+  date     finish_date
+  date     act_start_date
+  date     act_end_date
+  integer  delay_days
+  boolean  is_baseline
+}
+
+CONSTRAINTS {
+  uuid    id              PK
+  uuid    project_id      FK → projects.id
+  text    activity_id     FK → activities.activity_id
+  uuid    assigned_to     FK → profiles.id
+  text    constraint_type
+  text    status
+  date    due_date
+  text    description
+}
+
+WEEKLY_COMMITMENTS {
+  uuid    id              PK
+  uuid    project_id      FK → projects.id
+  text    activity_id     FK → activities.activity_id
+  date    week_start
+  boolean committed
+  boolean done
+  text    variance_reason
+}
+
+ACTIVITY_HISTORY {
+  uuid      id            PK
+  text      activity_id   FK → activities.activity_id
+  uuid      changed_by    FK → profiles.id
+  integer   progress_from
+  integer   progress_to
+  text      status_from
+  text      status_to
+  timestamp changed_at
+}
+```
+
+---
+
+### Roles and permissions
+
+| Role | Import | Edit any activity | Edit own activity | View only |
+|---|---|---|---|---|
+| Admin | Yes | Yes | Yes | Yes |
+| Planner | Yes | Yes | Yes | Yes |
+| Site Engineer | No | No | Yes | Yes |
+| Viewer | No | No | No | Yes |
+
+> Role-based access is enforced at the database level through Row Level Security policies,
+> not just hidden buttons in the UI.
+
+---
+
+### Key design decisions
+
+- A Site Engineer can only edit activities where `assigned_to = their user id`.
+  The database rejects any other update, even if the request is made directly.
+- A user cannot see data from projects they are not a member of.
+  This is enforced by RLS policies on every table using `project_id`.
+- Every progress or status change is recorded in `activity_history` with
+  the user who made the change and the before/after values.
+- `weekly_commitments` stores whether each committed activity was completed
+  that week, and if not — the variance reason (Material, Labour, RFI, etc.).
+  This builds the PPC trend over time.
