@@ -10,9 +10,11 @@ import {
   ClipboardList,
   LayoutDashboard,
   Menu,
+  Shield,
   Upload,
   X,
 } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 
 const NAV_ITEMS = [
   {
@@ -47,6 +49,12 @@ const NAV_ITEMS = [
   },
 ] as const;
 
+const ADMIN_NAV_ITEM = {
+  label: "Admin",
+  href: "/admin",
+  icon: Shield,
+} as const;
+
 const COLLAPSED_WIDTH = 56;
 const EXPANDED_WIDTH = 240;
 
@@ -59,6 +67,10 @@ function isLinkActive(pathname: string, href: string): boolean {
     return pathname === "/import" || pathname.startsWith("/activities/import");
   }
 
+  if (href === "/admin") {
+    return pathname === "/admin" || pathname.startsWith("/admin/");
+  }
+
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
@@ -66,9 +78,43 @@ export default function Sidebar() {
   const pathname = usePathname();
   const [isExpanded, setIsExpanded] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   const showLabels = isExpanded || isMobileOpen;
   const sidebarWidth = showLabels ? EXPANDED_WIDTH : COLLAPSED_WIDTH;
+  const navItems = isAdmin ? [...NAV_ITEMS, ADMIN_NAV_ITEM] : NAV_ITEMS;
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadAdminStatus() {
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!isMounted || !user) {
+        setIsAdmin(false);
+        return;
+      }
+
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("global_role")
+        .eq("id", user.id)
+        .single();
+
+      if (!isMounted) return;
+
+      setIsAdmin(profile?.global_role === "admin");
+    }
+
+    void loadAdminStatus();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [pathname]);
 
   useEffect(() => {
     setIsMobileOpen(false);
@@ -148,7 +194,7 @@ export default function Sidebar() {
         </div>
 
         <nav className="flex-1 space-y-1 overflow-y-auto p-2">
-          {NAV_ITEMS.map((item) => {
+          {navItems.map((item) => {
             const Icon = item.icon;
             const active = isLinkActive(pathname, item.href);
 
