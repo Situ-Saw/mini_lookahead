@@ -37,7 +37,9 @@ export async function updateSession(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname;
   const isLogin = pathname === "/login";
+  const isSelectProject = pathname === "/select-project";
   const isAuthCallback = pathname.startsWith("/auth/callback");
+  const hasActiveProject = Boolean(request.cookies.get("active_project")?.value);
 
   if (!user && !isLogin && !isAuthCallback) {
     const loginUrl = request.nextUrl.clone();
@@ -46,6 +48,18 @@ export async function updateSession(request: NextRequest) {
   }
 
   if (user && isLogin) {
+    const selectProjectUrl = request.nextUrl.clone();
+    selectProjectUrl.pathname = "/select-project";
+    return NextResponse.redirect(selectProjectUrl);
+  }
+
+  if (
+    user &&
+    !isLogin &&
+    !isAuthCallback &&
+    !isSelectProject &&
+    !hasActiveProject
+  ) {
     const selectProjectUrl = request.nextUrl.clone();
     selectProjectUrl.pathname = "/select-project";
     return NextResponse.redirect(selectProjectUrl);

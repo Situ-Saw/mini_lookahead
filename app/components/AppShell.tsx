@@ -4,10 +4,12 @@ import { usePathname } from "next/navigation";
 import Sidebar from "@/app/components/Sidebar";
 import TopBar from "@/app/components/TopBar";
 
-const AUTH_PATHS = new Set(["/login"]);
+const SHELL_EXCLUDED_PATHS = new Set(["/login", "/select-project"]);
 
-function isAuthRoute(pathname: string): boolean {
-  return AUTH_PATHS.has(pathname) || pathname.startsWith("/auth/");
+function isShellExcludedRoute(pathname: string): boolean {
+  return (
+    SHELL_EXCLUDED_PATHS.has(pathname) || pathname.startsWith("/auth/")
+  );
 }
 
 export default function AppShell({
@@ -17,7 +19,7 @@ export default function AppShell({
 }>) {
   const pathname = usePathname();
 
-  if (isAuthRoute(pathname)) {
+  if (isShellExcludedRoute(pathname)) {
     return <>{children}</>;
   }
 
