@@ -328,12 +328,173 @@ function SortButton({
   );
 }
 
+function AssignActivityModal({
+  activity,
+  engineers,
+  selectedEngineer,
+  incompleteCount,
+  openConstraintsCount,
+  isLoadingWarnings,
+  isAssigning,
+  assignError,
+  onSelectEngineer,
+  onAssign,
+  onCancel,
+}: {
+  activity: Activity;
+  engineers: Engineer[];
+  selectedEngineer: string;
+  incompleteCount: number | null;
+  openConstraintsCount: number | null;
+  isLoadingWarnings: boolean;
+  isAssigning: boolean;
+  assignError: string | null;
+  onSelectEngineer: (engineerId: string) => void;
+  onAssign: () => void;
+  onCancel: () => void;
+}) {
+  const isReassign = Boolean(activity.assigned_to);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <button
+        type="button"
+        aria-label="Close dialog"
+        className="absolute inset-0 bg-black/50"
+        onClick={isAssigning ? undefined : onCancel}
+        disabled={isAssigning}
+      />
+
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="assign-activity-title"
+        className="relative z-10 max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-zinc-200 bg-white p-6 shadow-xl dark:border-zinc-800 dark:bg-zinc-950"
+      >
+        <h2
+          id="assign-activity-title"
+          className="text-lg font-semibold text-zinc-900 dark:text-zinc-100"
+        >
+          {isReassign ? "Reassign Activity" : "Assign Activity"}
+        </h2>
+
+        <dl className="mt-4 space-y-2 rounded-lg bg-zinc-50 p-4 text-sm dark:bg-zinc-900/60">
+          <div className="flex justify-between gap-4">
+            <dt className="text-zinc-500 dark:text-zinc-400">Activity ID</dt>
+            <dd className="font-mono text-zinc-900 dark:text-zinc-100">
+              {activity.activity_id}
+            </dd>
+          </div>
+          <div className="flex justify-between gap-4">
+            <dt className="text-zinc-500 dark:text-zinc-400">Activity Name</dt>
+            <dd className="text-right text-zinc-900 dark:text-zinc-100">
+              {activity.activity_name}
+            </dd>
+          </div>
+          <div className="flex items-center justify-between gap-4">
+            <dt className="text-zinc-500 dark:text-zinc-400">Status</dt>
+            <dd>
+              <StatusBadge status={activity.status} />
+            </dd>
+          </div>
+          <div className="flex justify-between gap-4">
+            <dt className="text-zinc-500 dark:text-zinc-400">
+              Planned Finish Date
+            </dt>
+            <dd className="text-zinc-900 dark:text-zinc-100">
+              {formatDate(activity.finish_date)}
+            </dd>
+          </div>
+        </dl>
+
+        <div className="mt-5">
+          <label
+            htmlFor="assign-engineer"
+            className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+          >
+            Select Engineer
+          </label>
+          <select
+            id="assign-engineer"
+            required
+            value={selectedEngineer}
+            onChange={(event) => onSelectEngineer(event.target.value)}
+            disabled={isAssigning}
+            className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+          >
+            <option value="">Select an engineer...</option>
+            {engineers.map((engineer) => (
+              <option key={engineer.id} value={engineer.id}>
+                {engineer.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {selectedEngineer && (
+          <div className="mt-4 space-y-2">
+            {isLoadingWarnings ? (
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                Checking engineer workload...
+              </p>
+            ) : (
+              <>
+                {incompleteCount !== null && incompleteCount > 0 && (
+                  <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
+                    ⚠️ This engineer has {incompleteCount} incomplete{" "}
+                    {incompleteCount === 1 ? "activity" : "activities"}
+                  </p>
+                )}
+                {openConstraintsCount !== null && openConstraintsCount > 0 && (
+                  <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
+                    ⚠️ This engineer has {openConstraintsCount} open{" "}
+                    {openConstraintsCount === 1 ? "constraint" : "constraints"}
+                  </p>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+        {assignError && (
+          <p className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
+            {assignError}
+          </p>
+        )}
+
+        <div className="mt-6 flex justify-end gap-3">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={isAssigning}
+            className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onAssign}
+            disabled={!selectedEngineer || isAssigning}
+            className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+          >
+            {isAssigning ? "Assigning..." : "Assign"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ActivitiesTable({
   activities,
   engineers,
+  canManageAssignments,
+  onOpenAssignModal,
 }: {
   activities: Activity[];
   engineers: Engineer[];
+  canManageAssignments: boolean;
+  onOpenAssignModal: (activity: Activity) => void;
 }) {
   const innerRef = useRef<HTMLDivElement>(null);
   const outerRef = useRef<HTMLDivElement>(null);
@@ -445,6 +606,11 @@ function ActivitiesTable({
               <th className="min-w-[10rem] whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
                 Progress
               </th>
+              {canManageAssignments && (
+                <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+                  Actions
+                </th>
+              )}
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-200 bg-white dark:divide-zinc-800 dark:bg-zinc-950">
@@ -510,6 +676,27 @@ function ActivitiesTable({
                     progress={normalizeProgress(activity.progress)}
                   />
                 </td>
+                {canManageAssignments && (
+                  <td className="whitespace-nowrap px-4 py-3">
+                    {activity.assigned_to ? (
+                      <button
+                        type="button"
+                        onClick={() => onOpenAssignModal(activity)}
+                        className="rounded bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 transition-colors hover:bg-amber-100 dark:bg-amber-950/30 dark:text-amber-400 dark:hover:bg-amber-950/50"
+                      >
+                        Reassign
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => onOpenAssignModal(activity)}
+                        className="rounded bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:bg-blue-950/30 dark:text-blue-300 dark:hover:bg-blue-950/50"
+                      >
+                        Assign
+                      </button>
+                    )}
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
@@ -537,6 +724,18 @@ export default function ActivitiesPage() {
   const [activeFilter, setActiveFilter] = useState<ActivityFilter>("all");
   const [sortField, setSortField] = useState<SortField>("start_date");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+  const [assignModal, setAssignModal] = useState<Activity | null>(null);
+  const [selectedEngineer, setSelectedEngineer] = useState<string>("");
+  const [isAssigning, setIsAssigning] = useState(false);
+  const [assignError, setAssignError] = useState<string | null>(null);
+  const [incompleteCount, setIncompleteCount] = useState<number | null>(null);
+  const [openConstraintsCount, setOpenConstraintsCount] = useState<number | null>(
+    null,
+  );
+  const [isLoadingWarnings, setIsLoadingWarnings] = useState(false);
+
+  const canManageAssignments =
+    activeProject?.role === "admin" || activeProject?.role === "planner";
 
   useEffect(() => {
     document.title = "Activity Master";
@@ -551,8 +750,8 @@ export default function ActivitiesPage() {
     async function loadActivities() {
       setIsLoading(true);
       setFetchError(null);
-
-      const [activitiesResult, engineerResult] = await Promise.all([
+    
+      const [activitiesResult, memberResult] = await Promise.all([
         supabase
           .from("activities")
           .select(
@@ -562,39 +761,41 @@ export default function ActivitiesPage() {
           .order("activity_id", { ascending: true }),
         supabase
           .from("project_members")
-          .select("user_id, profiles(id, name, email)")
+          .select("user_id")
           .eq("project_id", projectId)
           .eq("role", "site_engineer"),
       ]);
-
+    
       if (!isMounted) return;
-
-      const { data, error } = activitiesResult;
-
-      if (error) {
-        setFetchError(error.message);
+    
+      if (activitiesResult.error) {
+        setFetchError(activitiesResult.error.message);
         setActivities([]);
       } else {
-        setActivities((data ?? []) as Activity[]);
+        setActivities((activitiesResult.data ?? []) as Activity[]);
       }
-
-      const engineerData = engineerResult.data;
-      setEngineers(
-        (engineerData ?? [])
-          .map((entry) => {
-            const profiles = entry.profiles;
-            return Array.isArray(profiles) ? profiles[0] : profiles;
-          })
-          .filter(
-            (profile): profile is Engineer =>
-              profile !== null &&
-              typeof profile === "object" &&
-              "id" in profile &&
-              "name" in profile &&
-              "email" in profile,
-          ),
-      );
-
+    
+      const engineerIds = memberResult.data?.map((m) => m.user_id) ?? [];
+    
+      if (engineerIds.length > 0) {
+        const { data: engineerData, error: engineerError } = await supabase
+          .from("profiles")
+          .select("id, name, email")
+          .in("id", engineerIds)
+          .order("name", { ascending: true });
+    
+        if (!isMounted) return;
+    
+        if (engineerError) {
+          console.error("Engineer fetch error:", engineerError.message);
+          setEngineers([]);
+        } else {
+          setEngineers((engineerData ?? []) as Engineer[]);
+        }
+      } else {
+        setEngineers([]);
+      }
+    
       setIsLoading(false);
     }
 
@@ -604,6 +805,167 @@ export default function ActivitiesPage() {
       isMounted = false;
     };
   }, [activeProject]);
+
+  const openAssignModal = useCallback((activity: Activity) => {
+    setAssignModal(activity);
+    setSelectedEngineer(activity.assigned_to ?? "");
+    setAssignError(null);
+    setIncompleteCount(null);
+    setOpenConstraintsCount(null);
+  }, []);
+
+  const closeAssignModal = useCallback(() => {
+    if (isAssigning) return;
+    setAssignModal(null);
+    setSelectedEngineer("");
+    setAssignError(null);
+    setIncompleteCount(null);
+    setOpenConstraintsCount(null);
+  }, [isAssigning]);
+
+  useEffect(() => {
+    if (!assignModal || !selectedEngineer || !activeProject) {
+      setIncompleteCount(null);
+      setOpenConstraintsCount(null);
+      setIsLoadingWarnings(false);
+      return;
+    }
+
+    const projectId = activeProject.id;
+    const engineerId = selectedEngineer;
+    let isMounted = true;
+
+    async function loadEngineerWarnings() {
+      setIsLoadingWarnings(true);
+
+      const { count: incomplete, error: incompleteError } = await supabase
+        .from("activities")
+        .select("*", { count: "exact", head: true })
+        .eq("assigned_to", engineerId)
+        .eq("project_id", projectId)
+        .neq("status", "Completed");
+
+      if (!isMounted) return;
+
+      if (incompleteError) {
+        setIncompleteCount(null);
+        setOpenConstraintsCount(null);
+        setIsLoadingWarnings(false);
+        return;
+      }
+
+      setIncompleteCount(incomplete ?? 0);
+
+      const { data: assignedActivities, error: activitiesError } = await supabase
+        .from("activities")
+        .select("activity_id")
+        .eq("assigned_to", engineerId)
+        .eq("project_id", projectId);
+
+      if (!isMounted) return;
+
+      if (activitiesError) {
+        setOpenConstraintsCount(null);
+        setIsLoadingWarnings(false);
+        return;
+      }
+
+      const activityIds = (assignedActivities ?? []).map(
+        (row) => row.activity_id,
+      );
+
+      if (activityIds.length === 0) {
+        setOpenConstraintsCount(0);
+        setIsLoadingWarnings(false);
+        return;
+      }
+
+      const { count: openConstraints, error: constraintsError } = await supabase
+        .from("constraints")
+        .select("*", { count: "exact", head: true })
+        .eq("project_id", projectId)
+        .eq("status", "Open")
+        .in("activity_id", activityIds);
+
+      if (!isMounted) return;
+
+      setOpenConstraintsCount(
+        constraintsError ? null : (openConstraints ?? 0),
+      );
+      setIsLoadingWarnings(false);
+    }
+
+    void loadEngineerWarnings();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [activeProject, assignModal, selectedEngineer]);
+
+  const handleAssign = useCallback(async () => {
+    if (!assignModal || !activeProject || !selectedEngineer) return;
+
+    setIsAssigning(true);
+    setAssignError(null);
+
+    const selectedEngineerProfile = engineers.find(
+      (engineer) => engineer.id === selectedEngineer,
+    );
+    const engineerName = selectedEngineerProfile?.name ?? "Unknown";
+    const previousEngineer = engineers.find(
+      (engineer) => engineer.id === assignModal.assigned_to,
+    );
+    const statusFrom = assignModal.assigned_to
+      ? `Assigned to ${previousEngineer?.name ?? "Unknown"}`
+      : "Unassigned";
+
+    const { error: updateError } = await supabase
+      .from("activities")
+      .update({ assigned_to: selectedEngineer })
+      .eq("activity_id", assignModal.activity_id)
+      .eq("project_id", activeProject.id);
+
+    if (updateError) {
+      setAssignError(updateError.message);
+      setIsAssigning(false);
+      return;
+    }
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    const { error: historyError } = await supabase
+      .from("activity_history")
+      .insert({
+        activity_id: assignModal.activity_id,
+        project_id: activeProject.id,
+        changed_by: user?.id ?? null,
+        status_from: statusFrom,
+        status_to: `Assigned to ${engineerName}`,
+        changed_at: new Date().toISOString(),
+      });
+
+    if (historyError) {
+      setAssignError(historyError.message);
+      setIsAssigning(false);
+      return;
+    }
+
+    setActivities((current) =>
+      current.map((activity) =>
+        activity.activity_id === assignModal.activity_id
+          ? { ...activity, assigned_to: selectedEngineer }
+          : activity,
+      ),
+    );
+    setAssignModal(null);
+    setSelectedEngineer("");
+    setAssignError(null);
+    setIncompleteCount(null);
+    setOpenConstraintsCount(null);
+    setIsAssigning(false);
+  }, [activeProject, assignModal, engineers, selectedEngineer]);
 
   const filteredByStatus = useMemo(
     () => activities.filter((activity) => matchesFilter(activity, activeFilter)),
@@ -775,7 +1137,28 @@ export default function ActivitiesPage() {
           No activities match your search or filter.
         </p>
       ) : (
-        <ActivitiesTable activities={sortedActivities} engineers={engineers} />
+        <ActivitiesTable
+          activities={sortedActivities}
+          engineers={engineers}
+          canManageAssignments={canManageAssignments}
+          onOpenAssignModal={openAssignModal}
+        />
+      )}
+
+      {assignModal && activeProject && (
+        <AssignActivityModal
+          activity={assignModal}
+          engineers={engineers}
+          selectedEngineer={selectedEngineer}
+          incompleteCount={incompleteCount}
+          openConstraintsCount={openConstraintsCount}
+          isLoadingWarnings={isLoadingWarnings}
+          isAssigning={isAssigning}
+          assignError={assignError}
+          onSelectEngineer={setSelectedEngineer}
+          onAssign={() => void handleAssign()}
+          onCancel={closeAssignModal}
+        />
       )}
     </main>
   );
