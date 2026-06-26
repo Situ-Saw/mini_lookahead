@@ -20,7 +20,6 @@ type SessionCommittedActivity = {
   status: string | null;
   finish_date: string | null;
   wbs_code: string | null;
-  responsible_engineer: string | null;
 };
 
 type StatusCategory = "not_started" | "in_progress" | "completed" | "other";
@@ -153,8 +152,6 @@ function normalizeSessionActivity(
     status: (activity.status as string | null) ?? null,
     finish_date: (activity.finish_date as string | null) ?? null,
     wbs_code: (activity.wbs_code as string | null) ?? null,
-    responsible_engineer:
-      (activity.responsible_engineer as string | null) ?? null,
   };
 }
 
@@ -179,9 +176,6 @@ function ActivityCard({ activity }: { activity: SessionCommittedActivity }) {
           </h3>
           <p className="text-xs text-zinc-500 dark:text-zinc-400">
             WBS: {activity.wbs_code ?? "—"}
-          </p>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">
-            Engineer: {activity.responsible_engineer ?? "—"}
           </p>
         </div>
 
@@ -267,8 +261,7 @@ export default function LookaheadPage() {
           activity_name,
           status,
           finish_date,
-          wbs_code,
-          responsible_engineer
+          wbs_code
         )
       `,
       )

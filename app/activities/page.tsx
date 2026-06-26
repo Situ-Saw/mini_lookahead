@@ -10,6 +10,7 @@ type Activity = {
   activity_id: string;
   activity_name: string;
   status: string | null;
+  assigned_to: string | null;
   wbs_code: string | null;
   start_date: string | null;
   finish_date: string | null;
@@ -19,7 +20,12 @@ type Activity = {
   act_duration: number | string | null;
   progress: number | string | null;
   delay_days: number | string | null;
-  responsible_engineer: string | null;
+};
+
+type Engineer = {
+  id: string;
+  name: string;
+  email: string;
 };
 
 type SortField = "start_date" | "finish_date";
@@ -322,7 +328,13 @@ function SortButton({
   );
 }
 
-function ActivitiesTable({ activities }: { activities: Activity[] }) {
+function ActivitiesTable({
+  activities,
+  engineers,
+}: {
+  activities: Activity[];
+  engineers: Engineer[];
+}) {
   const innerRef = useRef<HTMLDivElement>(null);
   const outerRef = useRef<HTMLDivElement>(null);
   const tableRef = useRef<HTMLTableElement>(null);
@@ -407,6 +419,9 @@ function ActivitiesTable({ activities }: { activities: Activity[] }) {
                 Status
               </th>
               <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+                Assigned To
+              </th>
+              <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
                 WBS Code
               </th>
               <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
@@ -430,9 +445,6 @@ function ActivitiesTable({ activities }: { activities: Activity[] }) {
               <th className="min-w-[10rem] whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
                 Progress
               </th>
-              <th className="min-w-[10rem] whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
-                Responsible Engineer
-              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-200 bg-white dark:divide-zinc-800 dark:bg-zinc-950">
@@ -449,6 +461,28 @@ function ActivitiesTable({ activities }: { activities: Activity[] }) {
                 </td>
                 <td className="whitespace-nowrap px-4 py-3">
                   <StatusBadge status={activity.status} />
+                </td>
+                <td className="whitespace-nowrap px-4 py-3">
+                  {activity.assigned_to ? (
+                    (() => {
+                      const engineer = engineers.find(
+                        (entry) => entry.id === activity.assigned_to,
+                      );
+                      return engineer ? (
+                        <span className="rounded bg-blue-50 px-2 py-1 text-xs text-blue-700">
+                          {engineer.name}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                          Unassigned
+                        </span>
+                      );
+                    })()
+                  ) : (
+                    <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                      Unassigned
+                    </span>
+                  )}
                 </td>
                 <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-zinc-700 dark:text-zinc-300">
                   {formatCell(activity.wbs_code)}
@@ -476,9 +510,6 @@ function ActivitiesTable({ activities }: { activities: Activity[] }) {
                     progress={normalizeProgress(activity.progress)}
                   />
                 </td>
-                <td className="whitespace-nowrap px-4 py-3 text-zinc-700 dark:text-zinc-300">
-                  {formatCell(activity.responsible_engineer)}
-                </td>
               </tr>
             ))}
           </tbody>
@@ -499,6 +530,7 @@ function ActivitiesTable({ activities }: { activities: Activity[] }) {
 export default function ActivitiesPage() {
   const { activeProject, isLoading: isProjectLoading } = useActiveProject();
   const [activities, setActivities] = useState<Activity[]>([]);
+  const [engineers, setEngineers] = useState<Engineer[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -520,15 +552,24 @@ export default function ActivitiesPage() {
       setIsLoading(true);
       setFetchError(null);
 
-      const { data, error } = await supabase
-        .from("activities")
-        .select(
-          "activity_id, activity_name, wbs_code, status, start_date, finish_date, duration, act_start_date, act_end_date, act_duration, progress, delay_days, responsible_engineer",
-        )
-        .eq("project_id", projectId)
-        .order("activity_id", { ascending: true });
+      const [activitiesResult, engineerResult] = await Promise.all([
+        supabase
+          .from("activities")
+          .select(
+            "activity_id, activity_name, wbs_code, status, assigned_to, start_date, finish_date, duration, act_start_date, act_end_date, act_duration, progress, delay_days",
+          )
+          .eq("project_id", projectId)
+          .order("activity_id", { ascending: true }),
+        supabase
+          .from("project_members")
+          .select("user_id, profiles(id, name, email)")
+          .eq("project_id", projectId)
+          .eq("role", "site_engineer"),
+      ]);
 
       if (!isMounted) return;
+
+      const { data, error } = activitiesResult;
 
       if (error) {
         setFetchError(error.message);
@@ -536,6 +577,23 @@ export default function ActivitiesPage() {
       } else {
         setActivities((data ?? []) as Activity[]);
       }
+
+      const engineerData = engineerResult.data;
+      setEngineers(
+        (engineerData ?? [])
+          .map((entry) => {
+            const profiles = entry.profiles;
+            return Array.isArray(profiles) ? profiles[0] : profiles;
+          })
+          .filter(
+            (profile): profile is Engineer =>
+              profile !== null &&
+              typeof profile === "object" &&
+              "id" in profile &&
+              "name" in profile &&
+              "email" in profile,
+          ),
+      );
 
       setIsLoading(false);
     }
@@ -717,7 +775,7 @@ export default function ActivitiesPage() {
           No activities match your search or filter.
         </p>
       ) : (
-        <ActivitiesTable activities={sortedActivities} />
+        <ActivitiesTable activities={sortedActivities} engineers={engineers} />
       )}
     </main>
   );
