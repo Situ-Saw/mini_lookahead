@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { APP_ROLES } from "@/lib/admin/credentials";
 import { requireAdmin } from "@/lib/admin/require-admin";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
@@ -7,6 +6,13 @@ type CreateProjectRequest = {
   name?: string;
   code?: string;
 };
+
+const SEQUENCE_ROLES = [
+  "admin",
+  "planner",
+  "site_engineer",
+  "viewer",
+] as const;
 
 export async function POST(request: Request) {
   const adminCheck = await requireAdmin();
@@ -74,7 +80,7 @@ export async function POST(request: Request) {
   const { error: sequenceError } = await supabaseAdmin
     .from("user_id_sequences")
     .insert(
-      APP_ROLES.map((role) => ({
+      SEQUENCE_ROLES.map((role) => ({
         project_id: project.id,
         role,
         last_sequence: 0,
