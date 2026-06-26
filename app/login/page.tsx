@@ -32,7 +32,7 @@ export default function LoginPage() {
 
     const supabase = createClient();
     const { error: signInError } = await supabase.auth.signInWithPassword({
-      email: trimmedUserId,
+      email: `${userId.trim().toUpperCase()}@lookahead.app`,
       password,
     });
 
