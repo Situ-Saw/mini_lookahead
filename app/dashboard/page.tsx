@@ -8,6 +8,7 @@ import {
   Circle,
   ClipboardList,
   Clock,
+  Loader2,
   RefreshCw,
   ShieldAlert,
   ShieldCheck,
@@ -17,6 +18,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { useActiveProject } from "@/lib/hooks/useActiveProject";
 
 const MS_PER_DAY = 86_400_000;
 
@@ -527,6 +529,7 @@ function getNetDelayDisplay(netDelay: number | null): {
 }
 
 export default function DashboardPage() {
+  const { activeProject, isLoading: isProjectLoading } = useActiveProject();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -537,7 +540,8 @@ export default function DashboardPage() {
     document.title = "Project Dashboard";
   }, []);
 
-  const loadDashboardData = useCallback(async (isMounted: () => boolean) => {
+  const loadDashboardData = useCallback(
+    async (isMounted: () => boolean, projectId: string) => {
     setIsLoading(true);
     setFetchError(null);
 
@@ -546,8 +550,12 @@ export default function DashboardPage() {
         .from("activities")
         .select(
           "status, start_date, finish_date, delay_days, is_baseline",
-        ),
-      supabase.from("constraints").select("status"),
+        )
+        .eq("project_id", projectId),
+      supabase
+        .from("constraints")
+        .select("status")
+        .eq("project_id", projectId),
     ]);
 
     if (!isMounted()) return;
@@ -574,17 +582,21 @@ export default function DashboardPage() {
     );
     setLastUpdated(new Date());
     setIsLoading(false);
-  }, []);
+  },
+    [],
+  );
 
   useEffect(() => {
+    if (!activeProject) return;
+
     let mounted = true;
 
-    void loadDashboardData(() => mounted);
+    void loadDashboardData(() => mounted, activeProject.id);
 
     return () => {
       mounted = false;
     };
-  }, [loadDashboardData, refreshKey]);
+  }, [loadDashboardData, refreshKey, activeProject]);
 
   const handleRefresh = useCallback(() => {
     setRefreshKey((current) => current + 1);
@@ -621,6 +633,39 @@ export default function DashboardPage() {
 
   const showBaselineBanner =
     !isLoading && stats !== null && stats.baselineCount === 0;
+
+  if (isProjectLoading) {
+    return (
+      <main className="flex min-h-[50vh] items-center justify-center bg-zinc-50/50 dark:bg-zinc-950">
+        <Loader2
+          className="h-8 w-8 animate-spin text-zinc-400"
+          aria-label="Loading project"
+        />
+      </main>
+    );
+  }
+
+  if (!activeProject) {
+    return (
+      <main className="min-h-full bg-zinc-50/50 dark:bg-zinc-950">
+        <div className="mx-auto w-full max-w-7xl flex-1 p-6 sm:p-10">
+          <div className="rounded-xl border border-zinc-200 bg-white p-8 text-center dark:border-zinc-800 dark:bg-zinc-950">
+            <p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
+              No project selected.
+              <br />
+              Please select a project to continue.
+            </p>
+            <Link
+              href="/select-project"
+              className="mt-4 inline-flex rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+            >
+              Select Project
+            </Link>
+          </div>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-full bg-zinc-50/50 dark:bg-zinc-950">
@@ -660,6 +705,11 @@ export default function DashboardPage() {
               </h1>
               <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
                 Overall project health and PPC summary
+              </p>
+              <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+                <span className="inline-flex items-center rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+                  {activeProject.code} — {activeProject.name}
+                </span>
               </p>
             </div>
 

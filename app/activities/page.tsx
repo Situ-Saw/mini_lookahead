@@ -1,7 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import { Loader2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { useActiveProject } from "@/lib/hooks/useActiveProject";
 
 type Activity = {
   activity_id: string;
@@ -494,6 +497,7 @@ function ActivitiesTable({ activities }: { activities: Activity[] }) {
 }
 
 export default function ActivitiesPage() {
+  const { activeProject, isLoading: isProjectLoading } = useActiveProject();
   const [activities, setActivities] = useState<Activity[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -507,6 +511,9 @@ export default function ActivitiesPage() {
   }, []);
 
   useEffect(() => {
+    if (!activeProject) return;
+
+    const projectId = activeProject.id;
     let isMounted = true;
 
     async function loadActivities() {
@@ -518,6 +525,7 @@ export default function ActivitiesPage() {
         .select(
           "activity_id, activity_name, wbs_code, status, start_date, finish_date, duration, act_start_date, act_end_date, act_duration, progress, delay_days, responsible_engineer",
         )
+        .eq("project_id", projectId)
         .order("activity_id", { ascending: true });
 
       if (!isMounted) return;
@@ -537,7 +545,7 @@ export default function ActivitiesPage() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [activeProject]);
 
   const filteredByStatus = useMemo(
     () => activities.filter((activity) => matchesFilter(activity, activeFilter)),
@@ -582,6 +590,37 @@ export default function ActivitiesPage() {
     });
   }, []);
 
+  if (isProjectLoading) {
+    return (
+      <main className="mx-auto flex min-h-[50vh] w-full max-w-7xl items-center justify-center p-6 sm:p-10">
+        <Loader2
+          className="h-8 w-8 animate-spin text-zinc-400"
+          aria-label="Loading project"
+        />
+      </main>
+    );
+  }
+
+  if (!activeProject) {
+    return (
+      <main className="mx-auto w-full max-w-7xl flex-1 p-6 sm:p-10">
+        <div className="rounded-xl border border-zinc-200 bg-white p-8 text-center dark:border-zinc-800 dark:bg-zinc-950">
+          <p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
+            No project selected.
+            <br />
+            Please select a project to continue.
+          </p>
+          <Link
+            href="/select-project"
+            className="mt-4 inline-flex rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+          >
+            Select Project
+          </Link>
+        </div>
+      </main>
+    );
+  }
+
   if (fetchError) {
     return (
       <main className="mx-auto w-full max-w-7xl flex-1 p-6 sm:p-10">
@@ -605,6 +644,11 @@ export default function ActivitiesPage() {
           {isLoading
             ? "Loading activities..."
             : `Showing ${sortedActivities.length} of ${activities.length} ${activities.length === 1 ? "activity" : "activities"}`}
+        </p>
+        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+          <span className="inline-flex items-center rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+            {activeProject.code} — {activeProject.name}
+          </span>
         </p>
       </div>
 

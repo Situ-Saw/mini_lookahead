@@ -1,8 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { RefreshCw } from "lucide-react";
+import Link from "next/link";
+import { Loader2, RefreshCw } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { useActiveProject } from "@/lib/hooks/useActiveProject";
 
 type PlanningSession = {
   id: string;
@@ -204,6 +206,7 @@ function ActivityCard({ activity }: { activity: SessionCommittedActivity }) {
 }
 
 export default function LookaheadPage() {
+  const { activeProject, isLoading: isProjectLoading } = useActiveProject();
   const [activeSession, setActiveSession] = useState<PlanningSession | null>(
     null,
   );
@@ -216,7 +219,10 @@ export default function LookaheadPage() {
     document.title = "Look Ahead";
   }, []);
 
-  const loadData = useCallback(async (options?: { isRefresh?: boolean }) => {
+  const loadData = useCallback(
+    async (options?: { isRefresh?: boolean }) => {
+    if (!activeProject) return;
+
     if (options?.isRefresh) {
       setIsRefreshing(true);
     } else {
@@ -227,6 +233,7 @@ export default function LookaheadPage() {
     const { data: sessionData, error: sessionError } = await supabase
       .from("planning_sessions")
       .select("id, start_date, end_date, status")
+      .eq("project_id", activeProject.id)
       .eq("status", "active")
       .limit(1)
       .maybeSingle();
@@ -292,16 +299,50 @@ export default function LookaheadPage() {
 
     setIsLoading(false);
     setIsRefreshing(false);
-  }, []);
+  },
+    [activeProject],
+  );
 
   useEffect(() => {
+    if (!activeProject) return;
     void loadData();
-  }, [loadData]);
+  }, [loadData, activeProject]);
 
   const remainingCount = useMemo(
     () => activities.filter((activity) => !activity.was_completed).length,
     [activities],
   );
+
+  if (isProjectLoading) {
+    return (
+      <main className="mx-auto flex min-h-[50vh] w-full max-w-7xl items-center justify-center p-6 sm:p-10">
+        <Loader2
+          className="h-8 w-8 animate-spin text-zinc-400"
+          aria-label="Loading project"
+        />
+      </main>
+    );
+  }
+
+  if (!activeProject) {
+    return (
+      <main className="mx-auto w-full max-w-7xl flex-1 p-6 sm:p-10">
+        <div className="rounded-xl border border-zinc-200 bg-white p-8 text-center dark:border-zinc-800 dark:bg-zinc-950">
+          <p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
+            No project selected.
+            <br />
+            Please select a project to continue.
+          </p>
+          <Link
+            href="/select-project"
+            className="mt-4 inline-flex rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+          >
+            Select Project
+          </Link>
+        </div>
+      </main>
+    );
+  }
 
   if (fetchError && isLoading) {
     return (
@@ -322,6 +363,12 @@ export default function LookaheadPage() {
         <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
           Look Ahead
         </h1>
+
+        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+          <span className="inline-flex items-center rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+            {activeProject.code} — {activeProject.name}
+          </span>
+        </p>
 
         {activeSession && !isLoading && (
           <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">

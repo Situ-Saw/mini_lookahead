@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { LogOut } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { useActiveProject } from "@/lib/hooks/useActiveProject";
 
 const SIDEBAR_WIDTH_PX = 56;
 
@@ -46,6 +47,7 @@ function getPageTitle(pathname: string): string {
 export default function TopBar() {
   const pathname = usePathname();
   const router = useRouter();
+  const { activeProject } = useActiveProject();
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [isSigningOut, setIsSigningOut] = useState(false);
 
@@ -87,9 +89,25 @@ export default function TopBar() {
       className="fixed top-0 right-0 z-40 flex h-12 items-center justify-between border-b border-zinc-200 bg-white px-4 dark:border-zinc-800 dark:bg-zinc-950"
       style={{ left: SIDEBAR_WIDTH_PX }}
     >
-      <h1 className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-100 sm:text-base">
-        {pageTitle}
-      </h1>
+      <div className="flex min-w-0 items-center gap-2">
+        <h1 className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-100 sm:text-base">
+          {pageTitle}
+        </h1>
+        {activeProject && (
+          <span className="shrink-0 rounded bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
+            [{activeProject.code}]
+          </span>
+        )}
+        {activeProject && (
+          <button
+            type="button"
+            onClick={() => router.push("/select-project")}
+            className="hidden shrink-0 rounded-md border border-zinc-200 px-2 py-1 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-50 sm:inline-flex dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-900"
+          >
+            Switch Project
+          </button>
+        )}
+      </div>
 
       <div className="flex shrink-0 items-center gap-3">
         <p

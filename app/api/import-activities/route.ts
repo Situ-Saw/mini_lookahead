@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { createClient } from "@/lib/supabase/server";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import {
   type ImportActivitiesResponse,
   type ImportMode,
@@ -14,6 +15,7 @@ export type { ImportActivitiesResponse } from "@/lib/primavera-import";
 type ImportActivitiesRequest = {
   rows: PrimaveraExcelRow[];
   mode?: ImportMode;
+  project_id?: string;
 };
 
 function isImportMode(value: unknown): value is ImportMode {
@@ -21,6 +23,25 @@ function isImportMode(value: unknown): value is ImportMode {
 }
 
 export async function POST(request: Request) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    return NextResponse.json(
+      {
+        totalReceived: 0,
+        totalValidRows: 0,
+        totalInserted: 0,
+        failedCount: 0,
+        error: "Unauthorized",
+      } satisfies ImportActivitiesResponse,
+      { status: 401 },
+    );
+  }
+
   let body: ImportActivitiesRequest;
 
   try {
@@ -52,15 +73,31 @@ export async function POST(request: Request) {
   }
 
   const mode: ImportMode = isImportMode(body.mode) ? body.mode : "update";
+  const projectId = body.project_id?.trim();
+
+  if (!projectId) {
+    return NextResponse.json(
+      {
+        totalReceived: body.rows?.length ?? 0,
+        totalValidRows: 0,
+        totalInserted: 0,
+        failedCount: 0,
+        error: "project_id is required.",
+      } satisfies ImportActivitiesResponse,
+      { status: 400 },
+    );
+  }
+
   const totalReceived = body.rows.length;
   const validRows = body.rows.filter(isValidActivityRow);
   const mappedActivities = mapRowsToActivities(validRows, mode);
   const totalValidRows = mappedActivities.length;
 
   if (mode === "baseline") {
-    const { count, error: baselineCountError } = await supabase
+    const { count, error: baselineCountError } = await supabaseAdmin
       .from("activities")
       .select("*", { count: "exact", head: true })
+      .eq("project_id", projectId)
       .eq("is_baseline", true);
 
     if (baselineCountError) {
@@ -100,11 +137,16 @@ export async function POST(request: Request) {
     return NextResponse.json(response);
   }
 
-  const upsertPayload = toUpsertPayload(mappedActivities, mode);
+  const upsertPayload = toUpsertPayload(mappedActivities, mode).map(
+    (activity) => ({
+      ...activity,
+      project_id: projectId,
+    }),
+  );
 
-  const { error } = await supabase
+  const { error } = await supabaseAdmin
     .from("activities")
-    .upsert(upsertPayload, { onConflict: "activity_id" });
+    .upsert(upsertPayload, { onConflict: "project_id,activity_id" });
 
   if (error) {
     console.error("Insert error:", error);

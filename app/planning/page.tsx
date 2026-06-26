@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { Loader2 } from "lucide-react";
 import {
   Bar,
   BarChart,
@@ -12,6 +14,7 @@ import {
   YAxis,
 } from "recharts";
 import { supabase } from "@/lib/supabase";
+import { useActiveProject } from "@/lib/hooks/useActiveProject";
 
 const SESSION_LENGTH_DAYS = 14;
 const MS_PER_DAY = 86_400_000;
@@ -335,6 +338,7 @@ function PpcChartTooltip({ active, payload }: ChartTooltipProps) {
 }
 
 export default function PlanningPage() {
+  const { activeProject, isLoading: isProjectLoading } = useActiveProject();
   const [activeSession, setActiveSession] = useState<PlanningSession | null>(
     null,
   );
@@ -375,12 +379,15 @@ export default function PlanningPage() {
   const [loadingLogsFor, setLoadingLogsFor] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
+    if (!activeProject) return;
+
     setIsLoading(true);
     setFetchError(null);
 
     const { data: activeData, error: activeError } = await supabase
       .from("planning_sessions")
       .select("*")
+      .eq("project_id", activeProject.id)
       .eq("status", "active")
       .limit(1)
       .maybeSingle();
@@ -469,11 +476,13 @@ export default function PlanningPage() {
           )
         `,
         )
+        .eq("project_id", activeProject.id)
         .eq("status", "closed")
         .order("created_at", { ascending: false }),
       supabase
         .from("planning_sessions")
         .select("end_date")
+        .eq("project_id", activeProject.id)
         .eq("status", "closed")
         .order("end_date", { ascending: false })
         .limit(1)
@@ -497,15 +506,16 @@ export default function PlanningPage() {
     }
 
     setIsLoading(false);
-  }, []);
+  }, [activeProject]);
 
   useEffect(() => {
     document.title = "Planning Sessions";
   }, []);
 
   useEffect(() => {
+    if (!activeProject) return;
     void loadData();
-  }, [loadData]);
+  }, [loadData, activeProject]);
 
   const minStartDate = useMemo(
     () => calculateMinStartDate(lastClosedSessionEndDate),
@@ -534,8 +544,9 @@ export default function PlanningPage() {
   }, [lastClosedSessionEndDate, minStartDate]);
 
   useEffect(() => {
-    if (activeSession || isLoading) return;
+    if (!activeProject || activeSession || isLoading) return;
 
+    const projectId = activeProject.id;
     let isMounted = true;
 
     async function loadPreview() {
@@ -545,6 +556,7 @@ export default function PlanningPage() {
       const { data, error } = await supabase
         .from("activities")
         .select("activity_id, activity_name, finish_date")
+        .eq("project_id", projectId)
         .gte("finish_date", startDateInput)
         .lte("finish_date", endDate)
         .order("activity_id");
@@ -566,7 +578,7 @@ export default function PlanningPage() {
     return () => {
       isMounted = false;
     };
-  }, [activeSession, isLoading, startDateInput]);
+  }, [activeProject, activeSession, isLoading, startDateInput]);
 
   const livePpc = useMemo(() => {
     const total = sessionActivities.length;
@@ -659,12 +671,15 @@ export default function PlanningPage() {
 
   const handleMarkInProgress = useCallback(
     async (sessionActivityId: string, activityId: string) => {
+      if (!activeProject) return;
+
       setActionError(null);
       setActionActivityId(sessionActivityId);
 
       const { error } = await supabase
         .from("activities")
         .update({ status: "In Progress" })
+        .eq("project_id", activeProject.id)
         .eq("activity_id", activityId);
 
       if (error) {
@@ -678,11 +693,13 @@ export default function PlanningPage() {
       });
       setActionActivityId(null);
     },
-    [updateSessionActivityStatus],
+    [activeProject, updateSessionActivityStatus],
   );
 
   const handleMarkComplete = useCallback(
     async (sessionActivityId: string, activityId: string) => {
+      if (!activeProject) return;
+
       setActionError(null);
       setActionActivityId(sessionActivityId);
 
@@ -702,6 +719,7 @@ export default function PlanningPage() {
       const { error: activityError } = await supabase
         .from("activities")
         .update({ status: "Completed", progress: 100 })
+        .eq("project_id", activeProject.id)
         .eq("activity_id", activityId);
 
       if (activityError) {
@@ -718,7 +736,7 @@ export default function PlanningPage() {
       });
       setActionActivityId(null);
     },
-    [updateSessionActivityStatus],
+    [activeProject, updateSessionActivityStatus],
   );
 
   const handleCloseSession = useCallback(async () => {
@@ -752,7 +770,7 @@ export default function PlanningPage() {
   }, [activeSession, allActivitiesCompleted, livePpc, loadData]);
 
   const handleStartSession = useCallback(async () => {
-    if (activeSession || previewActivities.length === 0) return;
+    if (!activeProject || activeSession || previewActivities.length === 0) return;
 
     setIsStarting(true);
     setActionError(null);
@@ -762,6 +780,7 @@ export default function PlanningPage() {
     const { data: session, error: sessionError } = await supabase
       .from("planning_sessions")
       .insert({
+        project_id: activeProject.id,
         start_date: startDateInput,
         end_date: endDate,
         status: "active",
@@ -799,6 +818,7 @@ export default function PlanningPage() {
       await supabase
         .from("activities")
         .select("activity_id")
+        .eq("project_id", activeProject.id)
         .eq("status", "Completed")
         .in("activity_id", committedActivityIds);
 
@@ -830,7 +850,13 @@ export default function PlanningPage() {
 
     setIsStarting(false);
     await loadData();
-  }, [activeSession, previewActivities, startDateInput, loadData]);
+  }, [
+    activeProject,
+    activeSession,
+    previewActivities,
+    startDateInput,
+    loadData,
+  ]);
 
   const handleAddLog = useCallback(async () => {
     if (!activeSession || !logNote.trim()) return;
@@ -897,6 +923,37 @@ export default function PlanningPage() {
     [expandedLogSessions, sessionLogsCache],
   );
 
+  if (isProjectLoading) {
+    return (
+      <main className="mx-auto flex min-h-[50vh] w-full max-w-7xl items-center justify-center p-6 sm:p-10">
+        <Loader2
+          className="h-8 w-8 animate-spin text-zinc-400"
+          aria-label="Loading project"
+        />
+      </main>
+    );
+  }
+
+  if (!activeProject) {
+    return (
+      <main className="mx-auto w-full max-w-7xl flex-1 p-6 sm:p-10">
+        <div className="rounded-xl border border-zinc-200 bg-white p-8 text-center dark:border-zinc-800 dark:bg-zinc-950">
+          <p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
+            No project selected.
+            <br />
+            Please select a project to continue.
+          </p>
+          <Link
+            href="/select-project"
+            className="mt-4 inline-flex rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+          >
+            Select Project
+          </Link>
+        </div>
+      </main>
+    );
+  }
+
   if (fetchError && isLoading) {
     return (
       <main className="mx-auto w-full max-w-7xl flex-1 p-6 sm:p-10">
@@ -918,6 +975,11 @@ export default function PlanningPage() {
         </h1>
         <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
           Manage 14-day planning sessions and track PPC performance.
+        </p>
+        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+          <span className="inline-flex items-center rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+            {activeProject.code} — {activeProject.name}
+          </span>
         </p>
       </div>
 

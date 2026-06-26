@@ -1,13 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
-import { BarChart3, Check, RefreshCw, Shield } from "lucide-react";
+import Link from "next/link";
+import { BarChart3, Check, Loader2, RefreshCw, Shield } from "lucide-react";
 import * as XLSX from "xlsx";
 import type { ImportActivitiesResponse, ImportMode } from "@/lib/primavera-import";
 import {
   type PrimaveraExcelRow,
   parsePrimaveraExcelRows,
 } from "@/lib/primavera-import";
+import { useActiveProject } from "@/lib/hooks/useActiveProject";
 
 const ACCEPTED_EXTENSIONS = [".xlsx", ".xls"];
 
@@ -121,6 +123,7 @@ function ModeCard({
 }
 
 export default function ImportPage() {
+  const { activeProject, isLoading: isProjectLoading } = useActiveProject();
   const inputId = useId();
   const [selectedMode, setSelectedMode] = useState<ImportMode>("baseline");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -196,6 +199,11 @@ export default function ImportPage() {
   }, [clearImportMessages, selectedFile]);
 
   const handleImportToDatabase = useCallback(async () => {
+    if (!activeProject) {
+      setError("Select a project before importing to the database.");
+      return;
+    }
+
     if (!parsedRows || parsedRows.length === 0) {
       setError("Parse an Excel file before importing to the database.");
       return;
@@ -211,6 +219,7 @@ export default function ImportPage() {
         body: JSON.stringify({
           rows: parsedRows,
           mode: selectedMode,
+          project_id: activeProject.id,
         }),
       });
 
@@ -243,7 +252,7 @@ export default function ImportPage() {
     } finally {
       setIsSavingToDb(false);
     }
-  }, [clearImportMessages, parsedRows, selectedMode]);
+  }, [activeProject, clearImportMessages, parsedRows, selectedMode]);
 
   const handleSwitchToProgressUpdate = useCallback(() => {
     setSelectedMode("update");
@@ -301,6 +310,37 @@ export default function ImportPage() {
     dbImportResult.failedCount > 0 &&
     !baselineExistsError;
 
+  if (isProjectLoading) {
+    return (
+      <main className="mx-auto flex min-h-[50vh] w-full max-w-5xl items-center justify-center p-6 sm:p-10">
+        <Loader2
+          className="h-8 w-8 animate-spin text-zinc-400"
+          aria-label="Loading project"
+        />
+      </main>
+    );
+  }
+
+  if (!activeProject) {
+    return (
+      <main className="mx-auto w-full max-w-5xl flex-1 p-6 sm:p-10">
+        <div className="rounded-xl border border-zinc-200 bg-white p-8 text-center dark:border-zinc-800 dark:bg-zinc-950">
+          <p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
+            No project selected.
+            <br />
+            Please select a project to continue.
+          </p>
+          <Link
+            href="/select-project"
+            className="mt-4 inline-flex rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+          >
+            Select Project
+          </Link>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="mx-auto w-full max-w-5xl flex-1 p-6 sm:p-10">
       <div className="mb-8">
@@ -310,6 +350,11 @@ export default function ImportPage() {
         <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
           Upload a Primavera P6 Excel export. The descriptive header row is
           skipped automatically and activity data is read from row 3 onward.
+        </p>
+        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+          <span className="inline-flex items-center rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+            {activeProject.code} — {activeProject.name}
+          </span>
         </p>
       </div>
 

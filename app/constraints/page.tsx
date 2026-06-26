@@ -1,7 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import { Loader2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { useActiveProject } from "@/lib/hooks/useActiveProject";
 
 const CONSTRAINT_TYPES = [
   "Drawing",
@@ -168,10 +171,12 @@ function ActivityIdField({
   value,
   onChange,
   disabled,
+  projectId,
 }: {
   value: string;
   onChange: (activityId: string) => void;
   disabled: boolean;
+  projectId: string;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [activities, setActivities] = useState<ActivityOption[]>([]);
@@ -190,6 +195,7 @@ function ActivityIdField({
       const { data, error } = await supabase
         .from("activities")
         .select("activity_id, activity_name")
+        .eq("project_id", projectId)
         .order("activity_id", { ascending: true });
 
       if (!isMounted) return;
@@ -209,7 +215,7 @@ function ActivityIdField({
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [projectId]);
 
   useEffect(() => {
     function handlePointerDown(event: MouseEvent) {
@@ -371,6 +377,7 @@ function ConstraintModal({
   isSaving,
   saveError,
   editingConstraint,
+  projectId,
   onChange,
   onCancel,
   onSave,
@@ -380,6 +387,7 @@ function ConstraintModal({
   isSaving: boolean;
   saveError: string | null;
   editingConstraint: Constraint | null;
+  projectId: string;
   onChange: (updates: Partial<ConstraintFormState>) => void;
   onCancel: () => void;
   onSave: () => void;
@@ -422,6 +430,7 @@ function ConstraintModal({
           <ActivityIdField
             value={form.activity_id}
             disabled={isSaving}
+            projectId={projectId}
             onChange={(activityId) => onChange({ activity_id: activityId })}
           />
 
@@ -595,6 +604,7 @@ function ConstraintModal({
 }
 
 export default function ConstraintsPage() {
+  const { activeProject, isLoading: isProjectLoading } = useActiveProject();
   const [constraints, setConstraints] = useState<Constraint[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -617,13 +627,14 @@ export default function ConstraintsPage() {
     document.title = "Constraint Register";
   }, []);
 
-  const loadConstraints = useCallback(async () => {
+  const loadConstraints = useCallback(async (projectId: string) => {
     setIsLoading(true);
     setFetchError(null);
 
     const { data, error } = await supabase
       .from("constraints")
       .select("*")
+      .eq("project_id", projectId)
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -637,8 +648,9 @@ export default function ConstraintsPage() {
   }, []);
 
   useEffect(() => {
-    void loadConstraints();
-  }, [loadConstraints]);
+    if (!activeProject) return;
+    void loadConstraints(activeProject.id);
+  }, [loadConstraints, activeProject]);
 
   const totalConstraints = constraints.length;
   const openConstraints = constraints.filter((c) => c.status === "Open").length;
@@ -691,6 +703,8 @@ export default function ConstraintsPage() {
   };
 
   const handleSave = async () => {
+    if (!activeProject) return;
+
     if (!form.constraint_type.trim()) {
       setSaveError("Constraint type is required.");
       return;
@@ -704,7 +718,10 @@ export default function ConstraintsPage() {
     setIsSaving(true);
     setSaveError(null);
 
-    const payload = formToPayload(form);
+    const payload = {
+      ...formToPayload(form),
+      project_id: activeProject.id,
+    };
     const now = new Date().toISOString();
 
     if (modalMode === "add") {
@@ -813,6 +830,37 @@ export default function ConstraintsPage() {
     );
   };
 
+  if (isProjectLoading) {
+    return (
+      <main className="mx-auto flex min-h-[50vh] w-full max-w-7xl items-center justify-center p-6 sm:p-10">
+        <Loader2
+          className="h-8 w-8 animate-spin text-zinc-400"
+          aria-label="Loading project"
+        />
+      </main>
+    );
+  }
+
+  if (!activeProject) {
+    return (
+      <main className="mx-auto w-full max-w-7xl flex-1 p-6 sm:p-10">
+        <div className="rounded-xl border border-zinc-200 bg-white p-8 text-center dark:border-zinc-800 dark:bg-zinc-950">
+          <p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
+            No project selected.
+            <br />
+            Please select a project to continue.
+          </p>
+          <Link
+            href="/select-project"
+            className="mt-4 inline-flex rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+          >
+            Select Project
+          </Link>
+        </div>
+      </main>
+    );
+  }
+
   if (fetchError) {
     return (
       <main className="mx-auto w-full max-w-7xl flex-1 p-6 sm:p-10">
@@ -835,6 +883,11 @@ export default function ConstraintsPage() {
           </h1>
           <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
             Track and manage construction constraints linked to activities.
+          </p>
+          <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+            <span className="inline-flex items-center rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+              {activeProject.code} — {activeProject.name}
+            </span>
           </p>
         </div>
         <button
@@ -1121,6 +1174,7 @@ export default function ConstraintsPage() {
           isSaving={isSaving}
           saveError={saveError}
           editingConstraint={editingConstraint}
+          projectId={activeProject.id}
           onChange={handleFormChange}
           onCancel={closeModal}
           onSave={() => void handleSave()}
