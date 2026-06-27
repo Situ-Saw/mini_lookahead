@@ -1369,6 +1369,278 @@ type UpdateProgressResponse = {
   error?: string;
 };
 
+type SessionDailyLog = {
+  id: string;
+  session_id: string;
+  log_date: string;
+  note: string;
+  logged_by: string | null;
+  created_at: string;
+};
+
+function SiteEngineerDailyLogSection({ projectId }: { projectId: string }) {
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [isInitializing, setIsInitializing] = useState(true);
+  const [dailyLogs, setDailyLogs] = useState<SessionDailyLog[]>([]);
+  const [selectedDate, setSelectedDate] = useState(
+    () => new Date().toISOString().split("T")[0],
+  );
+  const [note, setNote] = useState("");
+  const [isAddingLog, setIsAddingLog] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitSuccess, setSubmitSuccess] = useState(false);
+
+  const loadLogs = useCallback(async (sessionId: string, userId: string) => {
+    const { data: logsData, error: logsError } = await supabase
+      .from("session_daily_logs")
+      .select("*")
+      .eq("session_id", sessionId)
+      .eq("logged_by", userId)
+      .order("log_date", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(10);
+
+    if (logsError) {
+      console.error("Failed to load daily logs:", logsError.message);
+      setDailyLogs([]);
+      return;
+    }
+
+    setDailyLogs((logsData ?? []) as SessionDailyLog[]);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function initialize() {
+      setIsInitializing(true);
+      setSubmitError(null);
+
+      const today = new Date().toISOString().split("T")[0];
+      if (!cancelled) {
+        setSelectedDate(today);
+      }
+
+      const {
+        data: { user },
+        error: authError,
+      } = await supabase.auth.getUser();
+
+      if (cancelled) {
+        return;
+      }
+
+      let resolvedUserId: string | null = null;
+      if (authError || !user) {
+        if (authError) {
+          console.error("Failed to get current user:", authError.message);
+        }
+        setCurrentUserId(null);
+      } else {
+        resolvedUserId = user.id;
+        setCurrentUserId(user.id);
+      }
+
+      const { data: sessionData, error: sessionError } = await supabase
+        .from("planning_sessions")
+        .select("id")
+        .eq("project_id", projectId)
+        .eq("status", "active")
+        .limit(1)
+        .maybeSingle();
+
+      if (cancelled) {
+        return;
+      }
+
+      if (sessionError) {
+        console.error("Failed to load active session:", sessionError.message);
+        setActiveSessionId(null);
+        setDailyLogs([]);
+      } else {
+        const sessionId =
+          sessionData && typeof sessionData.id === "string"
+            ? sessionData.id
+            : null;
+        setActiveSessionId(sessionId);
+
+        if (sessionId && resolvedUserId) {
+          await loadLogs(sessionId, resolvedUserId);
+        } else {
+          setDailyLogs([]);
+        }
+      }
+
+      if (!cancelled) {
+        setIsInitializing(false);
+      }
+    }
+
+    void initialize();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId, loadLogs]);
+
+  useEffect(() => {
+    if (!submitSuccess) {
+      return;
+    }
+
+    const timeoutId = setTimeout(() => {
+      setSubmitSuccess(false);
+    }, 3000);
+
+    return () => {
+      clearTimeout(timeoutId);
+    };
+  }, [submitSuccess]);
+
+  const handleAddLog = async () => {
+    if (!activeSessionId) {
+      return;
+    }
+
+    if (!currentUserId) {
+      return;
+    }
+
+    if (!note.trim()) {
+      setSubmitError("Please enter a note before saving.");
+      setSubmitSuccess(false);
+      return;
+    }
+
+    setIsAddingLog(true);
+    setSubmitError(null);
+    setSubmitSuccess(false);
+
+    const { error } = await supabase.from("session_daily_logs").insert({
+      session_id: activeSessionId,
+      log_date: selectedDate,
+      note: note.trim(),
+      logged_by: currentUserId,
+      created_at: new Date().toISOString(),
+    });
+
+    if (error) {
+      setSubmitError(error.message);
+      setIsAddingLog(false);
+      return;
+    }
+
+    setNote("");
+    setSelectedDate(new Date().toISOString().split("T")[0]);
+    setSubmitSuccess(true);
+    await loadLogs(activeSessionId, currentUserId);
+    setIsAddingLog(false);
+  };
+
+  return (
+    <section className="mt-8 rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+      <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+        Daily Log
+      </h2>
+      <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+        Record what happened on site today.
+      </p>
+
+      {isInitializing ? (
+        <div className="mt-6 flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
+          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+          Loading daily log...
+        </div>
+      ) : !activeSessionId ? (
+        <p className="mt-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
+          No active planning session. Contact your planner.
+        </p>
+      ) : (
+        <>
+          <div className="mt-4 space-y-4 rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900/40">
+            <div>
+              <label
+                htmlFor="se-log-date"
+                className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+              >
+                Date
+              </label>
+              <input
+                id="se-log-date"
+                type="date"
+                value={selectedDate}
+                disabled={isAddingLog}
+                onChange={(event) => setSelectedDate(event.target.value)}
+                className="w-full max-w-xs rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+              />
+            </div>
+            <div>
+              <label
+                htmlFor="se-log-note"
+                className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+              >
+                Note
+              </label>
+              <textarea
+                id="se-log-note"
+                value={note}
+                disabled={isAddingLog}
+                onChange={(event) => setNote(event.target.value)}
+                rows={3}
+                placeholder="What happened on site today?"
+                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+              />
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={() => void handleAddLog()}
+                disabled={isAddingLog || !activeSessionId || !currentUserId}
+                className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+              >
+                {isAddingLog ? "Adding..." : "Add Log"}
+              </button>
+              {submitSuccess && (
+                <p className="text-sm text-emerald-600 dark:text-emerald-400">
+                  ✓ Log added
+                </p>
+              )}
+              {submitError && (
+                <p className="text-sm text-red-600 dark:text-red-400">
+                  {submitError}
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="mt-6 space-y-3">
+            {dailyLogs.length === 0 ? (
+              <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                No logs yet for this session.
+              </p>
+            ) : (
+              dailyLogs.map((log) => (
+                <div
+                  key={log.id}
+                  className="rounded-lg border border-zinc-200 bg-white px-4 py-3 dark:border-zinc-800 dark:bg-zinc-950"
+                >
+                  <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                    {formatDate(log.log_date)}
+                  </p>
+                  <p className="mt-2 text-sm text-zinc-700 dark:text-zinc-300">
+                    {log.note}
+                  </p>
+                </div>
+              ))
+            )}
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
 export default function ActivitiesPage() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
@@ -1643,6 +1915,10 @@ export default function ActivitiesPage() {
           onProgressChange={handleProgressChange}
           onSave={(activity) => void handleSave(activity)}
         />
+      )}
+
+      {isSiteEngineer && projectId && (
+        <SiteEngineerDailyLogSection projectId={projectId} />
       )}
     </main>
   );

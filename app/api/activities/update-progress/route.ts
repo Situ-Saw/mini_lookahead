@@ -118,5 +118,80 @@ export async function POST(request: Request) {
     );
   }
 
-  return NextResponse.json({ activity: updatedActivity });
+  let ppcUpdated = false;
+  let newPpc: number | null = null;
+
+  if (safeProgress === 100) {
+    const { data: activeSession, error: activeSessionError } =
+      await supabaseAdmin
+        .from("planning_sessions")
+        .select("id")
+        .eq("project_id", project_id)
+        .eq("status", "active")
+        .limit(1)
+        .maybeSingle();
+
+    if (activeSessionError) {
+      console.error(
+        "Failed to load active session for PPC update:",
+        activeSessionError.message,
+      );
+    } else if (!activeSession?.id) {
+      console.error("No active session found for PPC update.");
+    } else {
+      const activeSessionId = String(activeSession.id);
+      const completedAt = new Date().toISOString();
+
+      const { error: sessionActivityError } = await supabaseAdmin
+        .from("session_activities")
+        .update({ was_completed: true, completed_at: completedAt })
+        .eq("activity_id", activity_id)
+        .eq("session_id", activeSessionId);
+
+      if (sessionActivityError) {
+        console.error(
+          "session_activities completion update failed:",
+          sessionActivityError.message,
+        );
+      } else {
+        const { data: sessionRows, error: sessionRowsError } =
+          await supabaseAdmin
+            .from("session_activities")
+            .select("was_completed")
+            .eq("session_id", activeSessionId);
+
+        if (sessionRowsError) {
+          console.error(
+            "Failed to count session activities for PPC:",
+            sessionRowsError.message,
+          );
+        } else {
+          const total = sessionRows?.length ?? 0;
+          const completed = (sessionRows ?? []).filter(
+            (row) => row.was_completed === true,
+          ).length;
+          const ppcScore =
+            total > 0 ? Math.round((completed / total) * 1000) / 10 : 0;
+
+          const { error: ppcUpdateError } = await supabaseAdmin
+            .from("planning_sessions")
+            .update({ ppc_score: ppcScore })
+            .eq("id", activeSessionId);
+
+          if (ppcUpdateError) {
+            console.error("planning_sessions PPC update failed:", ppcUpdateError.message);
+          } else {
+            ppcUpdated = true;
+            newPpc = ppcScore;
+          }
+        }
+      }
+    }
+  }
+
+  return NextResponse.json({
+    activity: updatedActivity,
+    ppc_updated: ppcUpdated,
+    new_ppc: newPpc,
+  });
 }

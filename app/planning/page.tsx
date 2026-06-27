@@ -73,15 +73,6 @@ function normalizeSessionActivityRow(
   };
 }
 
-type DailyLog = {
-  id: string;
-  session_id: string;
-  log_date: string;
-  note: string;
-  logged_by: string | null;
-  created_at: string;
-};
-
 type SessionActivitySummary = {
   id: string;
   was_completed: boolean;
@@ -322,18 +313,11 @@ function getPpcColorClasses(ppc: number): {
   badge: string;
   bar: string;
 } {
-  if (ppc >= 100) {
+  if (ppc >= 71) {
     return {
       badge:
         "bg-emerald-100 text-emerald-800 ring-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-200 dark:ring-emerald-900",
       bar: "#10b981",
-    };
-  }
-  if (ppc >= 71) {
-    return {
-      badge:
-        "bg-blue-100 text-blue-800 ring-blue-200 dark:bg-blue-950/50 dark:text-blue-200 dark:ring-blue-900",
-      bar: "#3b82f6",
     };
   }
   if (ppc >= 41) {
@@ -463,7 +447,6 @@ export default function PlanningPage() {
   const [sessionActivities, setSessionActivities] = useState<
     SessionActivityRow[]
   >([]);
-  const [dailyLogs, setDailyLogs] = useState<DailyLog[]>([]);
   const [closedSessions, setClosedSessions] = useState<ClosedSession[]>([]);
   const [previewActivities, setPreviewActivities] = useState<ActivityPreview[]>(
     [],
@@ -483,18 +466,6 @@ export default function PlanningPage() {
   const [isClosing, setIsClosing] = useState(false);
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
 
-  const [logDate, setLogDate] = useState(todayIso);
-  const [loggedBy, setLoggedBy] = useState("");
-  const [logNote, setLogNote] = useState("");
-  const [isAddingLog, setIsAddingLog] = useState(false);
-
-  const [expandedLogSessions, setExpandedLogSessions] = useState<Set<string>>(
-    new Set(),
-  );
-  const [sessionLogsCache, setSessionLogsCache] = useState<
-    Record<string, DailyLog[]>
-  >({});
-  const [loadingLogsFor, setLoadingLogsFor] = useState<string | null>(null);
   const [engineers, setEngineers] = useState<ProjectEngineer[]>([]);
   const [assignmentMap, setAssignmentMap] = useState<
     Record<string, ActivityAssignment | null>
@@ -531,7 +502,6 @@ export default function PlanningPage() {
       setFetchError(activeError.message);
       setActiveSession(null);
       setSessionActivities([]);
-      setDailyLogs([]);
       setClosedSessions([]);
       setAssignmentMap({});
       setReassigningActivityIds(new Set());
@@ -543,11 +513,10 @@ export default function PlanningPage() {
     setActiveSession(session);
 
     if (session) {
-      const [activitiesResult, logsResult] = await Promise.all([
-        supabase
-          .from("session_activities")
-          .select(
-            `
+      const { data: activitiesData, error: activitiesError } = await supabase
+        .from("session_activities")
+        .select(
+          `
             id,
             session_id,
             activity_id,
@@ -561,35 +530,20 @@ export default function PlanningPage() {
               progress
             )
           `,
-          )
-          .eq("session_id", session.id)
-          .order("activity_id"),
-        supabase
-          .from("session_daily_logs")
-          .select("*")
-          .eq("session_id", session.id)
-          .order("log_date", { ascending: false }),
-      ]);
+        )
+        .eq("session_id", session.id)
+        .order("activity_id");
 
-      if (activitiesResult.error) {
-        setFetchError(activitiesResult.error.message);
+      if (activitiesError) {
+        setFetchError(activitiesError.message);
         setSessionActivities([]);
-        setDailyLogs([]);
         setAssignmentMap({});
         setReassigningActivityIds(new Set());
       } else {
-        const normalizedActivities = (activitiesResult.data ?? []).map((row) =>
+        const normalizedActivities = (activitiesData ?? []).map((row) =>
           normalizeSessionActivityRow(row as Record<string, unknown>),
         );
         setSessionActivities(normalizedActivities);
-        setDailyLogs(
-          logsResult.error
-            ? []
-            : ((logsResult.data ?? []) as DailyLog[]),
-        );
-        if (logsResult.error) {
-          setActionError(logsResult.error.message);
-        }
 
         const activityIds = normalizedActivities.map((row) => row.activity_id);
         const nextAssignmentMap = await loadAssignmentMap(
@@ -601,7 +555,6 @@ export default function PlanningPage() {
       }
     } else {
       setSessionActivities([]);
-      setDailyLogs([]);
       setAssignmentMap({});
       setReassigningActivityIds(new Set());
     }
@@ -745,11 +698,36 @@ export default function PlanningPage() {
     };
   }, [activeProject, activeSession, isLoading, startDateInput]);
 
-  const livePpc = useMemo(() => {
-    const total = sessionActivities.length;
-    const completed = sessionActivities.filter((row) => row.was_completed).length;
-    return calculatePpc(completed, total);
-  }, [sessionActivities]);
+  const livePpc =
+    activeSession?.ppc_score !== null && activeSession?.ppc_score !== undefined
+      ? Number(activeSession.ppc_score)
+      : 0;
+
+  const refreshPpcFromDb = useCallback(async (sessionId: string) => {
+    const { data, error } = await supabase
+      .from("planning_sessions")
+      .select("ppc_score")
+      .eq("id", sessionId)
+      .maybeSingle();
+
+    if (error) {
+      console.error("Failed to refresh PPC score:", error.message);
+      return null;
+    }
+
+    const ppcScore =
+      data?.ppc_score !== null && data?.ppc_score !== undefined
+        ? Number(data.ppc_score)
+        : 0;
+
+    setActiveSession((current) =>
+      current && current.id === sessionId
+        ? { ...current, ppc_score: ppcScore }
+        : current,
+    );
+
+    return ppcScore;
+  }, []);
 
   const allActivitiesCompleted = useMemo(
     () =>
@@ -929,34 +907,53 @@ export default function PlanningPage() {
     [activeProject, updateSessionActivityStatus],
   );
 
+  // PPC is primarily driven by SE progress updates via
+  // /api/activities/update-progress. This is a fallback
+  // for admin/planner direct completion.
   const handleMarkComplete = useCallback(
     async (sessionActivityId: string, activityId: string) => {
-      if (!activeProject) return;
+      if (!activeProject || !activeSession) return;
 
       setActionError(null);
       setActionActivityId(sessionActivityId);
+
+      try {
+        const historyResponse = await fetch("/api/activities/update-progress", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            activity_id: activityId,
+            project_id: activeProject.id,
+            progress: 100,
+          }),
+        });
+
+        if (!historyResponse.ok) {
+          const historyBody = (await historyResponse.json()) as {
+            error?: string;
+          };
+          setActionError(
+            historyBody.error ?? "Failed to mark activity complete.",
+          );
+          setActionActivityId(null);
+          return;
+        }
+      } catch {
+        setActionError("Failed to mark activity complete.");
+        setActionActivityId(null);
+        return;
+      }
 
       const completedAt = new Date().toISOString();
 
       const { error: sessionError } = await supabase
         .from("session_activities")
         .update({ was_completed: true, completed_at: completedAt })
-        .eq("id", sessionActivityId);
+        .eq("session_id", activeSession.id)
+        .eq("activity_id", activityId);
 
       if (sessionError) {
         setActionError(sessionError.message);
-        setActionActivityId(null);
-        return;
-      }
-
-      const { error: activityError } = await supabase
-        .from("activities")
-        .update({ status: "Completed", progress: 100 })
-        .eq("project_id", activeProject.id)
-        .eq("activity_id", activityId);
-
-      if (activityError) {
-        setActionError(activityError.message);
         setActionActivityId(null);
         return;
       }
@@ -967,9 +964,15 @@ export default function PlanningPage() {
         status: "Completed",
         progress: 100,
       });
+      await refreshPpcFromDb(activeSession.id);
       setActionActivityId(null);
     },
-    [activeProject, updateSessionActivityStatus],
+    [
+      activeProject,
+      activeSession,
+      updateSessionActivityStatus,
+      refreshPpcFromDb,
+    ],
   );
 
   const handleCloseSession = useCallback(async () => {
@@ -978,7 +981,10 @@ export default function PlanningPage() {
     setIsClosing(true);
     setActionError(null);
 
-    const ppcScore = livePpc;
+    const ppcScore =
+      activeSession.ppc_score !== null && activeSession.ppc_score !== undefined
+        ? Number(activeSession.ppc_score)
+        : livePpc;
     const closedAt = new Date().toISOString();
 
     const { error } = await supabase
@@ -1090,71 +1096,6 @@ export default function PlanningPage() {
     startDateInput,
     loadData,
   ]);
-
-  const handleAddLog = useCallback(async () => {
-    if (!activeSession || !logNote.trim()) return;
-
-    setIsAddingLog(true);
-    setActionError(null);
-
-    const { data, error } = await supabase
-      .from("session_daily_logs")
-      .insert({
-        session_id: activeSession.id,
-        log_date: logDate,
-        note: logNote.trim(),
-        logged_by: loggedBy.trim() || null,
-      })
-      .select()
-      .single();
-
-    if (error || !data) {
-      setActionError(error?.message ?? "Failed to add daily log.");
-      setIsAddingLog(false);
-      return;
-    }
-
-    setDailyLogs((current) => [data as DailyLog, ...current]);
-    setLogNote("");
-    setIsAddingLog(false);
-  }, [activeSession, logDate, logNote, loggedBy]);
-
-  const toggleSessionLogs = useCallback(
-    async (sessionId: string) => {
-      if (expandedLogSessions.has(sessionId)) {
-        setExpandedLogSessions((current) => {
-          const next = new Set(current);
-          next.delete(sessionId);
-          return next;
-        });
-        return;
-      }
-
-      if (!sessionLogsCache[sessionId]) {
-        setLoadingLogsFor(sessionId);
-        const { data, error } = await supabase
-          .from("session_daily_logs")
-          .select("*")
-          .eq("session_id", sessionId)
-          .order("log_date", { ascending: false });
-
-        if (error) {
-          setActionError(error.message);
-          setLoadingLogsFor(null);
-          return;
-        }
-
-        setSessionLogsCache((current) => ({
-          ...current,
-          [sessionId]: (data ?? []) as DailyLog[],
-        }));
-        setLoadingLogsFor(null);
-      }
-
-      setExpandedLogSessions((current) => new Set(current).add(sessionId));
-    },
-    [expandedLogSessions, sessionLogsCache],
-  );
 
   if (isProjectLoading || isRoleLoading) {
     return (
@@ -1321,6 +1262,20 @@ export default function PlanningPage() {
                       {canManageAssignments && (
                         <td className="whitespace-nowrap px-4 py-3">
                           {(() => {
+                            const status = row.activities?.status ?? null;
+                            const isActivityDone =
+                              row.was_completed ||
+                              status === "Completed" ||
+                              getStatusCategory(status) === "completed";
+
+                            if (isActivityDone) {
+                              return (
+                                <span className="text-zinc-400 dark:text-zinc-500">
+                                  —
+                                </span>
+                              );
+                            }
+
                             const assignment = assignmentMap[row.activity_id];
                             const isSavingAssign =
                               savingAssignMap[row.activity_id] === true;
@@ -1437,22 +1392,33 @@ export default function PlanningPage() {
                             );
                           }
 
+                          if (
+                            category === "not_started" ||
+                            status === "Not Started"
+                          ) {
+                            return (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  void handleMarkInProgress(
+                                    row.id,
+                                    row.activity_id,
+                                  )
+                                }
+                                disabled={isActionLoading}
+                                className="rounded-md border border-zinc-300 bg-zinc-100 px-3 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                              >
+                                {isActionLoading
+                                  ? "Saving..."
+                                  : "Mark In Progress"}
+                              </button>
+                            );
+                          }
+
                           return (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                void handleMarkInProgress(
-                                  row.id,
-                                  row.activity_id,
-                                )
-                              }
-                              disabled={isActionLoading}
-                              className="rounded-md border border-zinc-300 bg-zinc-100 px-3 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
-                            >
-                              {isActionLoading
-                                ? "Saving..."
-                                : "Mark In Progress"}
-                            </button>
+                            <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                              —
+                            </span>
                           );
                         })()}
                       </td>
@@ -1509,102 +1475,6 @@ export default function PlanningPage() {
                     </p>
                   )}
                 </div>
-              )}
-            </div>
-          </section>
-
-          <section className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
-            <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-              Daily Log
-            </h2>
-
-            <div className="mt-4 grid gap-4 rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900/40 sm:grid-cols-2">
-              <div>
-                <label
-                  htmlFor="log-date"
-                  className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
-                >
-                  Date
-                </label>
-                <input
-                  id="log-date"
-                  type="date"
-                  value={logDate}
-                  onChange={(event) => setLogDate(event.target.value)}
-                  className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
-                />
-              </div>
-              <div>
-                <label
-                  htmlFor="logged-by"
-                  className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
-                >
-                  Logged by
-                </label>
-                <input
-                  id="logged-by"
-                  type="text"
-                  value={loggedBy}
-                  onChange={(event) => setLoggedBy(event.target.value)}
-                  placeholder="Your name"
-                  className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
-                />
-              </div>
-              <div className="sm:col-span-2">
-                <label
-                  htmlFor="log-note"
-                  className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
-                >
-                  Note
-                </label>
-                <textarea
-                  id="log-note"
-                  value={logNote}
-                  onChange={(event) => setLogNote(event.target.value)}
-                  rows={3}
-                  required
-                  placeholder="What happened on site today?"
-                  className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
-                />
-              </div>
-              <div className="sm:col-span-2">
-                <button
-                  type="button"
-                  onClick={() => void handleAddLog()}
-                  disabled={isAddingLog || !logNote.trim()}
-                  className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
-                >
-                  {isAddingLog ? "Adding..." : "Add Log"}
-                </button>
-              </div>
-            </div>
-
-            <div className="mt-6 space-y-3">
-              {dailyLogs.length === 0 ? (
-                <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                  No daily logs yet for this session.
-                </p>
-              ) : (
-                dailyLogs.map((log) => (
-                  <div
-                    key={log.id}
-                    className="rounded-lg border border-zinc-200 bg-white px-4 py-3 dark:border-zinc-800 dark:bg-zinc-950"
-                  >
-                    <div className="flex flex-wrap items-center gap-2 text-sm">
-                      <span className="font-medium text-zinc-900 dark:text-zinc-100">
-                        {formatDate(log.log_date)}
-                      </span>
-                      {log.logged_by && (
-                        <span className="text-zinc-500 dark:text-zinc-400">
-                          · {log.logged_by}
-                        </span>
-                      )}
-                    </div>
-                    <p className="mt-2 text-sm text-zinc-700 dark:text-zinc-300">
-                      {log.note}
-                    </p>
-                  </div>
-                ))
               )}
             </div>
           </section>
@@ -1760,9 +1630,6 @@ export default function PlanningPage() {
                     <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
                       Closed Date
                     </th>
-                    <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
-                      Logs
-                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-200 bg-white dark:divide-zinc-800 dark:bg-zinc-950">
@@ -1777,8 +1644,6 @@ export default function PlanningPage() {
                       session.ppc_score !== undefined
                         ? Number(session.ppc_score)
                         : calculatePpc(completed, total);
-                    const isExpanded = expandedLogSessions.has(session.id);
-                    const logs = sessionLogsCache[session.id] ?? [];
 
                     return (
                       <tr key={session.id} className="align-top">
@@ -1799,45 +1664,6 @@ export default function PlanningPage() {
                         </td>
                         <td className="whitespace-nowrap px-4 py-3 text-zinc-700 dark:text-zinc-300">
                           {formatDateTime(session.closed_at)}
-                        </td>
-                        <td className="px-4 py-3">
-                          <button
-                            type="button"
-                            onClick={() => void toggleSessionLogs(session.id)}
-                            className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
-                          >
-                            {loadingLogsFor === session.id
-                              ? "Loading..."
-                              : isExpanded
-                                ? "Hide Logs"
-                                : "View Logs"}
-                          </button>
-                          {isExpanded && (
-                            <div className="mt-3 min-w-[16rem] space-y-2">
-                              {logs.length === 0 ? (
-                                <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                                  No logs for this session.
-                                </p>
-                              ) : (
-                                logs.map((log) => (
-                                  <div
-                                    key={log.id}
-                                    className="rounded border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs dark:border-zinc-800 dark:bg-zinc-900/40"
-                                  >
-                                    <p className="font-medium text-zinc-800 dark:text-zinc-200">
-                                      {formatDate(log.log_date)}
-                                      {log.logged_by
-                                        ? ` · ${log.logged_by}`
-                                        : ""}
-                                    </p>
-                                    <p className="mt-1 text-zinc-600 dark:text-zinc-400">
-                                      {log.note}
-                                    </p>
-                                  </div>
-                                ))
-                              )}
-                            </div>
-                          )}
                         </td>
                       </tr>
                     );
