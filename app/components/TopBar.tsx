@@ -77,6 +77,9 @@ export default function TopBar() {
   const handleSignOut = async () => {
     setIsSigningOut(true);
 
+    localStorage.removeItem("active_project");
+    document.cookie = "active_project=; path=/; max-age=0; SameSite=Lax";
+
     const supabase = createClient();
     await supabase.auth.signOut();
 

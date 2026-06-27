@@ -24,6 +24,14 @@ type SessionCommittedActivity = {
 
 type StatusCategory = "not_started" | "in_progress" | "completed" | "other";
 
+type ActivityConstraint = {
+  id: string;
+  constraint_type: string;
+  description: string;
+  status: string;
+  target_removal_date: string | null;
+};
+
 function parseDateOnly(value: string | null): Date | null {
   if (!value) return null;
 
@@ -155,7 +163,15 @@ function normalizeSessionActivity(
   };
 }
 
-function ActivityCard({ activity }: { activity: SessionCommittedActivity }) {
+function ActivityCard({
+  activity,
+  openConstraints = [],
+}: {
+  activity: SessionCommittedActivity;
+  openConstraints?: ActivityConstraint[];
+}) {
+  const [showReasons, setShowReasons] = useState(false);
+  const isBlocked = openConstraints.length > 0;
   const category = getStatusCategory(activity.status, activity.was_completed);
   const isCompleted = category === "completed";
   const borderClass = getCardBorderClass(category);
@@ -189,10 +205,53 @@ function ActivityCard({ activity }: { activity: SessionCommittedActivity }) {
             </p>
           </div>
 
-          <StatusBadge
-            status={activity.status}
-            wasCompleted={activity.was_completed}
-          />
+          <div className="flex flex-col items-start gap-2 sm:items-end">
+            {isBlocked ? (
+              <>
+                <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-1 text-xs font-medium text-red-800 ring-1 ring-inset ring-red-200 dark:bg-red-950/50 dark:text-red-200 dark:ring-red-900">
+                  ⚠ Not Ready
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowReasons((current) => !current)}
+                  className="text-xs font-medium text-red-700 underline-offset-2 hover:underline dark:text-red-300"
+                >
+                  {showReasons ? "Hide reasons" : "Show reasons"}
+                </button>
+                {showReasons && (
+                  <ul className="w-full space-y-2 sm:max-w-xs sm:text-right">
+                    {openConstraints.map((constraint) => (
+                      <li
+                        key={constraint.id}
+                        className="rounded-lg border border-red-100 bg-red-50/50 px-3 py-2 text-left dark:border-red-900/40 dark:bg-red-950/20"
+                      >
+                        <p className="text-xs font-semibold text-red-900 dark:text-red-200">
+                          {constraint.constraint_type}
+                        </p>
+                        <p className="truncate text-xs text-zinc-600 dark:text-zinc-400">
+                          {constraint.description}
+                        </p>
+                        {constraint.target_removal_date && (
+                          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                            Due: {formatDate(constraint.target_removal_date)}
+                          </p>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </>
+            ) : (
+              <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-800 ring-1 ring-inset ring-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-200 dark:ring-emerald-900">
+                ✓ Ready
+              </span>
+            )}
+
+            <StatusBadge
+              status={activity.status}
+              wasCompleted={activity.was_completed}
+            />
+          </div>
         </div>
       </div>
     </article>
@@ -205,6 +264,10 @@ export default function LookaheadPage() {
     null,
   );
   const [activities, setActivities] = useState<SessionCommittedActivity[]>([]);
+  const [constraintsMap, setConstraintsMap] = useState<
+    Record<string, ActivityConstraint[]>
+  >({});
+  const [showBlockedOnly, setShowBlockedOnly] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -236,6 +299,7 @@ export default function LookaheadPage() {
       setFetchError(sessionError.message);
       setActiveSession(null);
       setActivities([]);
+      setConstraintsMap({});
       setIsLoading(false);
       setIsRefreshing(false);
       return;
@@ -246,6 +310,7 @@ export default function LookaheadPage() {
 
     if (!session) {
       setActivities([]);
+      setConstraintsMap({});
       setIsLoading(false);
       setIsRefreshing(false);
       return;
@@ -270,6 +335,7 @@ export default function LookaheadPage() {
     if (error) {
       setFetchError(error.message);
       setActivities([]);
+      setConstraintsMap({});
     } else {
       const normalized = (data ?? [])
         .map((row) => normalizeSessionActivity(row as Record<string, unknown>))
@@ -288,6 +354,63 @@ export default function LookaheadPage() {
         });
 
       setActivities(normalized);
+
+      const activityIds = normalized.map((activity) => activity.activity_id);
+
+      if (activityIds.length === 0) {
+        setConstraintsMap({});
+      } else {
+        const { data: constraintsData, error: constraintsError } =
+          await supabase
+            .from("constraints")
+            .select(
+              "id, activity_id, constraint_type, description, status, target_removal_date",
+            )
+            .eq("project_id", activeProject.id)
+            .in("activity_id", activityIds)
+            .eq("status", "Open");
+
+        if (constraintsError) {
+          console.error(
+            "Failed to load constraints:",
+            constraintsError.message,
+          );
+          setConstraintsMap({});
+        } else {
+          const nextConstraintsMap: Record<string, ActivityConstraint[]> = {};
+
+          for (const row of constraintsData ?? []) {
+            const record = row as Record<string, unknown>;
+            const activityId =
+              typeof record.activity_id === "string"
+                ? record.activity_id
+                : String(record.activity_id ?? "");
+
+            if (!activityId) {
+              continue;
+            }
+
+            const constraint: ActivityConstraint = {
+              id: String(record.id ?? ""),
+              constraint_type: String(record.constraint_type ?? ""),
+              description: String(record.description ?? ""),
+              status: String(record.status ?? ""),
+              target_removal_date:
+                typeof record.target_removal_date === "string"
+                  ? record.target_removal_date
+                  : null,
+            };
+
+            if (!nextConstraintsMap[activityId]) {
+              nextConstraintsMap[activityId] = [];
+            }
+
+            nextConstraintsMap[activityId].push(constraint);
+          }
+
+          setConstraintsMap(nextConstraintsMap);
+        }
+      }
     }
 
     setIsLoading(false);
@@ -304,6 +427,25 @@ export default function LookaheadPage() {
   const remainingCount = useMemo(
     () => activities.filter((activity) => !activity.was_completed).length,
     [activities],
+  );
+
+  const blockedCount = useMemo(
+    () =>
+      activities.filter(
+        (activity) => (constraintsMap[activity.activity_id] ?? []).length > 0,
+      ).length,
+    [activities, constraintsMap],
+  );
+
+  const visibleActivities = useMemo(
+    () =>
+      showBlockedOnly
+        ? activities.filter(
+            (activity) =>
+              (constraintsMap[activity.activity_id] ?? []).length > 0,
+          )
+        : activities,
+    [activities, constraintsMap, showBlockedOnly],
   );
 
   if (isProjectLoading) {
@@ -337,7 +479,7 @@ export default function LookaheadPage() {
     );
   }
 
-  if (fetchError && isLoading) {
+  if (fetchError && !isLoading && !activeSession && activities.length === 0) {
     return (
       <main className="mx-auto w-full max-w-7xl flex-1 p-6 sm:p-10">
         <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
@@ -396,7 +538,7 @@ export default function LookaheadPage() {
         </div>
       ) : (
         <>
-          <div className="mb-8 grid gap-4 sm:grid-cols-2">
+          <div className="mb-8 grid gap-4 sm:grid-cols-3">
             <div className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
               <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
                 Total Activities
@@ -414,9 +556,29 @@ export default function LookaheadPage() {
                 {remainingCount.toLocaleString()}
               </p>
             </div>
+
+            <div className="rounded-xl border border-red-200 bg-red-50 p-5 shadow-sm dark:border-red-900/50 dark:bg-red-950/30">
+              <p className="text-sm font-medium text-red-700 dark:text-red-300">
+                Blocked Activities
+              </p>
+              <p className="mt-2 text-3xl font-bold tracking-tight text-red-900 dark:text-red-100">
+                {blockedCount.toLocaleString()}
+              </p>
+            </div>
           </div>
 
-          <div className="mb-4 flex justify-end">
+          <div className="mb-4 flex flex-wrap items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setShowBlockedOnly((current) => !current)}
+              className={`inline-flex items-center justify-center rounded-lg px-4 py-2.5 text-sm font-medium transition-colors ${
+                showBlockedOnly
+                  ? "bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+                  : "border border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
+              }`}
+            >
+              Show blocked only
+            </button>
             <button
               type="button"
               onClick={() => void loadData({ isRefresh: true })}
@@ -436,10 +598,20 @@ export default function LookaheadPage() {
               No tasks assigned yet. Ask your supervisor to update the weekly
               work plan.
             </p>
+          ) : visibleActivities.length === 0 ? (
+            <p className="rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-8 text-center text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-400">
+              No blocked activities in this session.
+            </p>
           ) : (
             <div className="space-y-3">
-              {activities.map((activity) => (
-                <ActivityCard key={activity.activity_id} activity={activity} />
+              {visibleActivities.map((activity) => (
+                <ActivityCard
+                  key={activity.activity_id}
+                  activity={activity}
+                  openConstraints={
+                    constraintsMap[activity.activity_id] ?? []
+                  }
+                />
               ))}
             </div>
           )}

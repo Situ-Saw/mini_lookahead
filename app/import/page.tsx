@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { BarChart3, Check, Loader2, RefreshCw, Shield } from "lucide-react";
 import * as XLSX from "xlsx";
 import type { ImportActivitiesResponse, ImportMode } from "@/lib/primavera-import";
@@ -10,6 +11,8 @@ import {
   parsePrimaveraExcelRows,
 } from "@/lib/primavera-import";
 import { useActiveProject } from "@/lib/hooks/useActiveProject";
+import { useProjectRole } from "@/lib/hooks/useProjectRole";
+import { hasRoleAccess } from "@/lib/role-access";
 
 const ACCEPTED_EXTENSIONS = [".xlsx", ".xls"];
 
@@ -32,6 +35,10 @@ const PREVIEW_COLUMN_LABELS: Record<string, string> = {
   target_end_date: "Planned Finish",
   target_drtn_hr_cnt: "Duration (d)",
 };
+
+function normalizePreviewKey(row: PrimaveraExcelRow): string {
+  return String(row.task_code ?? "");
+}
 
 function isExcelFile(file: File): boolean {
   const lowerName = file.name.toLowerCase();
@@ -123,6 +130,8 @@ function ModeCard({
 }
 
 export default function ImportPage() {
+  const router = useRouter();
+  const { role, isRoleLoading } = useProjectRole();
   const { activeProject, isLoading: isProjectLoading } = useActiveProject();
   const inputId = useId();
   const [selectedMode, setSelectedMode] = useState<ImportMode>("baseline");
@@ -141,6 +150,16 @@ export default function ImportPage() {
   useEffect(() => {
     document.title = "Import Activities";
   }, []);
+
+  useEffect(() => {
+    if (isRoleLoading) {
+      return;
+    }
+
+    if (!hasRoleAccess(role, "import")) {
+      router.push("/dashboard");
+    }
+  }, [role, isRoleLoading, router]);
 
   const previewRows = useMemo(
     () => (parsedRows ? parsedRows.slice(0, 5) : []),
@@ -310,12 +329,23 @@ export default function ImportPage() {
     dbImportResult.failedCount > 0 &&
     !baselineExistsError;
 
-  if (isProjectLoading) {
+  if (isProjectLoading || isRoleLoading) {
     return (
       <main className="mx-auto flex min-h-[50vh] w-full max-w-5xl items-center justify-center p-6 sm:p-10">
         <Loader2
           className="h-8 w-8 animate-spin text-zinc-400"
           aria-label="Loading project"
+        />
+      </main>
+    );
+  }
+
+  if (!hasRoleAccess(role, "import")) {
+    return (
+      <main className="mx-auto flex min-h-[50vh] w-full max-w-5xl items-center justify-center p-6 sm:p-10">
+        <Loader2
+          className="h-8 w-8 animate-spin text-zinc-400"
+          aria-label="Checking access"
         />
       </main>
     );
@@ -613,6 +643,3 @@ export default function ImportPage() {
   );
 }
 
-function normalizePreviewKey(row: PrimaveraExcelRow): string {
-  return String(row.task_code ?? "");
-}

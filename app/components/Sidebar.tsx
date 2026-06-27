@@ -2,21 +2,31 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   Calendar,
   CalendarCheck,
   ClipboardList,
   LayoutDashboard,
+  LucideIcon,
   Menu,
   Shield,
   Upload,
   X,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { useProjectRole } from "@/lib/hooks/useProjectRole";
+import { hasRoleAccess, ROLE_ACCESS } from "@/lib/role-access";
 
-const NAV_ITEMS = [
+type NavItem = {
+  label: string;
+  href: string;
+  icon: LucideIcon;
+  accessKey?: keyof typeof ROLE_ACCESS;
+};
+
+const NAV_ITEMS: NavItem[] = [
   {
     label: "Dashboard",
     href: "/dashboard",
@@ -31,6 +41,7 @@ const NAV_ITEMS = [
     label: "Import Excel",
     href: "/import",
     icon: Upload,
+    accessKey: "import",
   },
   {
     label: "Look Ahead",
@@ -41,22 +52,27 @@ const NAV_ITEMS = [
     label: "Planning",
     href: "/planning",
     icon: CalendarCheck,
+    accessKey: "planning",
   },
   {
     label: "Constraints",
     href: "/constraints",
     icon: AlertTriangle,
+    accessKey: "constraints",
   },
-] as const;
+];
 
-const ADMIN_NAV_ITEM = {
+const ADMIN_NAV_ITEM: NavItem = {
   label: "Admin",
   href: "/admin",
   icon: Shield,
-} as const;
+  accessKey: "admin_panel",
+};
 
 const COLLAPSED_WIDTH = 56;
 const EXPANDED_WIDTH = 240;
+
+const SKELETON_NAV_ITEMS = [...NAV_ITEMS, ADMIN_NAV_ITEM];
 
 function isLinkActive(pathname: string, href: string): boolean {
   if (href === "/activities") {
@@ -74,42 +90,102 @@ function isLinkActive(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
+function NavSkeleton({
+  item,
+  showLabels,
+}: {
+  item: NavItem;
+  showLabels: boolean;
+}) {
+  const Icon = item.icon;
+
+  return (
+    <div
+      aria-hidden="true"
+      className={`flex animate-pulse items-center rounded-lg py-2.5 text-sm ${
+        showLabels ? "gap-3 px-3" : "justify-center px-0"
+      }`}
+    >
+      <Icon className="h-5 w-5 shrink-0 text-zinc-600" />
+      {showLabels && <span className="h-4 flex-1 rounded bg-zinc-700/80" />}
+    </div>
+  );
+}
+
 export default function Sidebar() {
   const pathname = usePathname();
+  const { role, isRoleLoading } = useProjectRole();
   const [isExpanded, setIsExpanded] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [isGlobalAdmin, setIsGlobalAdmin] = useState(false);
+  const [isGlobalAdminLoading, setIsGlobalAdminLoading] = useState(true);
 
   const showLabels = isExpanded || isMobileOpen;
   const sidebarWidth = showLabels ? EXPANDED_WIDTH : COLLAPSED_WIDTH;
-  const navItems = isAdmin ? [...NAV_ITEMS, ADMIN_NAV_ITEM] : NAV_ITEMS;
+  const isAccessLoading = isRoleLoading || isGlobalAdminLoading;
+
+  const navItems = useMemo(() => {
+    const visibleItems = NAV_ITEMS.filter((item) => {
+      if (!item.accessKey) {
+        return true;
+      }
+
+      return hasRoleAccess(role, item.accessKey);
+    });
+
+    if (isGlobalAdmin) {
+      visibleItems.push(ADMIN_NAV_ITEM);
+    }
+
+    return visibleItems;
+  }, [role, isGlobalAdmin]);
 
   useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
     let isMounted = true;
 
-    async function loadAdminStatus() {
+    async function loadGlobalAdminStatus() {
       const supabase = createClient();
       const {
         data: { user },
+        error: userError,
       } = await supabase.auth.getUser();
 
-      if (!isMounted || !user) {
-        setIsAdmin(false);
+      if (!isMounted) {
         return;
       }
 
-      const { data: profile } = await supabase
+      if (userError || !user) {
+        setIsGlobalAdmin(false);
+        setIsGlobalAdminLoading(false);
+        return;
+      }
+
+      const { data: profile, error: profileError } = await supabase
         .from("profiles")
         .select("global_role")
         .eq("id", user.id)
-        .single();
+        .maybeSingle();
 
-      if (!isMounted) return;
+      if (!isMounted) {
+        return;
+      }
 
-      setIsAdmin(profile?.global_role === "admin");
+      if (profileError) {
+        console.error("Failed to load global role:", profileError.message);
+        setIsGlobalAdmin(false);
+        setIsGlobalAdminLoading(false);
+        return;
+      }
+
+      setIsGlobalAdmin(profile?.global_role === "admin");
+      setIsGlobalAdminLoading(false);
     }
 
-    void loadAdminStatus();
+    void loadGlobalAdminStatus();
 
     return () => {
       isMounted = false;
@@ -194,44 +270,52 @@ export default function Sidebar() {
         </div>
 
         <nav className="flex-1 space-y-1 overflow-y-auto p-2">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            const active = isLinkActive(pathname, item.href);
+          {isAccessLoading
+            ? SKELETON_NAV_ITEMS.map((item) => (
+                <NavSkeleton
+                  key={item.href}
+                  item={item}
+                  showLabels={showLabels}
+                />
+              ))
+            : navItems.map((item) => {
+                const Icon = item.icon;
+                const active = isLinkActive(pathname, item.href);
 
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                title={showLabels ? undefined : item.label}
-                onClick={() => setIsMobileOpen(false)}
-                className={`group relative flex items-center rounded-lg py-2.5 text-sm font-medium transition-colors ${
-                  showLabels ? "gap-3 px-3" : "justify-center px-0"
-                } ${
-                  active
-                    ? "bg-zinc-700 text-white"
-                    : "text-zinc-300 hover:bg-zinc-800 hover:text-white"
-                }`}
-              >
-                <Icon className="h-5 w-5 shrink-0" />
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    title={showLabels ? undefined : item.label}
+                    onClick={() => setIsMobileOpen(false)}
+                    className={`group relative flex items-center rounded-lg py-2.5 text-sm font-medium transition-colors ${
+                      showLabels ? "gap-3 px-3" : "justify-center px-0"
+                    } ${
+                      active
+                        ? "bg-zinc-700 text-white"
+                        : "text-zinc-300 hover:bg-zinc-800 hover:text-white"
+                    }`}
+                  >
+                    <Icon className="h-5 w-5 shrink-0" />
 
-                <span
-                  className={`truncate whitespace-nowrap transition-opacity duration-200 ${
-                    showLabels
-                      ? "opacity-100"
-                      : "pointer-events-none w-0 overflow-hidden opacity-0"
-                  }`}
-                >
-                  {item.label}
-                </span>
+                    <span
+                      className={`truncate whitespace-nowrap transition-opacity duration-200 ${
+                        showLabels
+                          ? "opacity-100"
+                          : "pointer-events-none w-0 overflow-hidden opacity-0"
+                      }`}
+                    >
+                      {item.label}
+                    </span>
 
-                {!showLabels && (
-                  <span className="pointer-events-none absolute left-full z-50 ml-3 hidden whitespace-nowrap rounded-md bg-zinc-800 px-2.5 py-1.5 text-xs font-medium text-white shadow-lg group-hover:block">
-                    {item.label}
-                  </span>
-                )}
-              </Link>
-            );
-          })}
+                    {!showLabels && (
+                      <span className="pointer-events-none absolute left-full z-50 ml-3 hidden whitespace-nowrap rounded-md bg-zinc-800 px-2.5 py-1.5 text-xs font-medium text-white shadow-lg group-hover:block">
+                        {item.label}
+                      </span>
+                    )}
+                  </Link>
+                );
+              })}
         </nav>
       </aside>
     </>

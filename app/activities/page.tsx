@@ -2,8 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
+import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
+import { createClient } from "@/lib/supabase/client";
 import { useActiveProject } from "@/lib/hooks/useActiveProject";
 
 type Activity = {
@@ -27,6 +30,203 @@ type Engineer = {
   name: string;
   email: string;
 };
+
+type MyActivityRow = {
+  id: string;
+  project_id: string;
+  activity_id: string;
+  activity_name: string;
+  status: string | null;
+  progress: number;
+  start_date: string | null;
+  finish_date: string | null;
+  delay_days: number | null;
+};
+
+function normalizeMyActivity(row: Record<string, unknown>): MyActivityRow | null {
+  if (
+    typeof row.activity_id !== "string" ||
+    typeof row.activity_name !== "string"
+  ) {
+    return null;
+  }
+
+  const delayDays = row.delay_days;
+  let parsedDelay: number | null = null;
+  if (delayDays !== null && delayDays !== undefined && delayDays !== "") {
+    const numeric =
+      typeof delayDays === "number" ? delayDays : Number(delayDays);
+    parsedDelay = Number.isNaN(numeric) ? null : numeric;
+  }
+
+  return {
+    id: typeof row.id === "string" ? row.id : String(row.id ?? ""),
+    project_id:
+      typeof row.project_id === "string"
+        ? row.project_id
+        : String(row.project_id ?? ""),
+    activity_id: row.activity_id,
+    activity_name: row.activity_name,
+    status: typeof row.status === "string" ? row.status : null,
+    progress: normalizeProgress(row.progress as number | string | null),
+    start_date: typeof row.start_date === "string" ? row.start_date : null,
+    finish_date: typeof row.finish_date === "string" ? row.finish_date : null,
+    delay_days: parsedDelay,
+  };
+}
+
+function SeStatusBadge({ status }: { status: string | null }) {
+  const label = status ?? "Unknown";
+  const normalized = label.toLowerCase();
+
+  const className =
+    normalized === "completed"
+      ? "bg-emerald-100 text-emerald-800 ring-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-200 dark:ring-emerald-900"
+      : normalized === "in progress"
+        ? "bg-amber-100 text-amber-800 ring-amber-200 dark:bg-amber-950/50 dark:text-amber-200 dark:ring-amber-900"
+        : "bg-zinc-100 text-zinc-700 ring-zinc-200 dark:bg-zinc-800 dark:text-zinc-200 dark:ring-zinc-700";
+
+  return (
+    <span
+      className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset ${className}`}
+    >
+      {label}
+    </span>
+  );
+}
+
+function MyActivitiesTable({
+  activities,
+  showUpdateColumn,
+  progressMap,
+  savingMap,
+  feedbackMap,
+  onProgressChange,
+  onSave,
+}: {
+  activities: MyActivityRow[];
+  showUpdateColumn: boolean;
+  progressMap: Record<string, number>;
+  savingMap: Record<string, boolean>;
+  feedbackMap: Record<string, "saved" | "error" | null>;
+  onProgressChange: (activityId: string, progress: number) => void;
+  onSave: (activity: MyActivityRow) => void;
+}) {
+  return (
+    <div className="overflow-x-auto rounded-lg border border-zinc-200 shadow-sm dark:border-zinc-800">
+      <table className="min-w-full divide-y divide-zinc-200 text-left text-sm dark:divide-zinc-800">
+        <thead className="bg-zinc-50 dark:bg-zinc-900/60">
+          <tr>
+            <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+              Activity ID
+            </th>
+            <th className="min-w-[12rem] whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+              Activity Name
+            </th>
+            <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+              Status
+            </th>
+            <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+              Progress
+            </th>
+            <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+              Start Date
+            </th>
+            <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+              Finish Date
+            </th>
+            <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+              Delay Days
+            </th>
+            {showUpdateColumn && (
+              <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+                Update
+              </th>
+            )}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-zinc-200 bg-white dark:divide-zinc-800 dark:bg-zinc-950">
+          {activities.map((activity) => {
+            const isSaving = savingMap[activity.activity_id] === true;
+            const feedback = feedbackMap[activity.activity_id] ?? null;
+
+            return (
+              <tr
+                key={activity.activity_id}
+                className="transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-900/40"
+              >
+                <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-zinc-700 dark:text-zinc-300">
+                  {activity.activity_id}
+                </td>
+                <td className="whitespace-nowrap px-4 py-3 font-medium text-zinc-900 dark:text-zinc-100">
+                  {activity.activity_name}
+                </td>
+                <td className="whitespace-nowrap px-4 py-3">
+                  <SeStatusBadge status={activity.status} />
+                </td>
+                <td className="whitespace-nowrap px-4 py-3 text-zinc-700 dark:text-zinc-300">
+                  {progressMap[activity.activity_id] ?? activity.progress}%
+                </td>
+                <td className="whitespace-nowrap px-4 py-3 text-zinc-700 dark:text-zinc-300">
+                  {formatDate(activity.start_date)}
+                </td>
+                <td className="whitespace-nowrap px-4 py-3 text-zinc-700 dark:text-zinc-300">
+                  {formatDate(activity.finish_date)}
+                </td>
+                <td className="whitespace-nowrap px-4 py-3 text-zinc-700 dark:text-zinc-300">
+                  {activity.delay_days ?? "—"}
+                </td>
+                {showUpdateColumn && (
+                  <td className="whitespace-nowrap px-4 py-3">
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          min={0}
+                          max={100}
+                          step={5}
+                          value={
+                            progressMap[activity.activity_id] ?? activity.progress
+                          }
+                          onChange={(event) =>
+                            onProgressChange(
+                              activity.activity_id,
+                              Number(event.target.value),
+                            )
+                          }
+                          disabled={isSaving}
+                          className="w-20 rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm text-zinc-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => onSave(activity)}
+                          disabled={isSaving}
+                          className="rounded bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+                        >
+                          {isSaving ? "Saving..." : "Save"}
+                        </button>
+                      </div>
+                      {feedback === "saved" && (
+                        <p className="text-xs text-emerald-600 dark:text-emerald-400">
+                          ✓ Saved
+                        </p>
+                      )}
+                      {feedback === "error" && (
+                        <p className="text-xs text-red-600 dark:text-red-400">
+                          ✗ Failed — try again
+                        </p>
+                      )}
+                    </div>
+                  </td>
+                )}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
 type SortField = "start_date" | "finish_date";
 type SortDirection = "asc" | "desc";
@@ -714,7 +914,7 @@ function ActivitiesTable({
   );
 }
 
-export default function ActivitiesPage() {
+function PlannerAdminActivitiesView() {
   const { activeProject, isLoading: isProjectLoading } = useActiveProject();
   const [activities, setActivities] = useState<Activity[]>([]);
   const [engineers, setEngineers] = useState<Engineer[]>([]);
@@ -1158,6 +1358,290 @@ export default function ActivitiesPage() {
           onSelectEngineer={setSelectedEngineer}
           onAssign={() => void handleAssign()}
           onCancel={closeAssignModal}
+        />
+      )}
+    </main>
+  );
+}
+
+type UpdateProgressResponse = {
+  activity?: Record<string, unknown>;
+  error?: string;
+};
+
+export default function ActivitiesPage() {
+  const router = useRouter();
+  const [user, setUser] = useState<User | null>(null);
+  const [role, setRole] = useState<string | null>(null);
+  const [activities, setActivities] = useState<MyActivityRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [roleLoading, setRoleLoading] = useState(true);
+  const [savingMap, setSavingMap] = useState<Record<string, boolean>>({});
+  const [progressMap, setProgressMap] = useState<Record<string, number>>({});
+  const [feedbackMap, setFeedbackMap] = useState<
+    Record<string, "saved" | "error" | null>
+  >({});
+  const [projectId, setProjectId] = useState<string | null>(null);
+  const [initError, setInitError] = useState<string | null>(null);
+  const feedbackTimeoutsRef = useRef<
+    Record<string, ReturnType<typeof setTimeout>>
+  >({});
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    let cancelled = false;
+
+    async function initialize() {
+      try {
+        const storedProject = localStorage.getItem("active_project");
+        let resolvedProjectId: string | null = null;
+
+        if (storedProject) {
+          try {
+            const parsed = JSON.parse(storedProject) as { id?: string };
+            resolvedProjectId = parsed.id?.trim() || null;
+          } catch {
+            resolvedProjectId = storedProject.trim() || null;
+          }
+        }
+
+        if (!resolvedProjectId) {
+          if (!cancelled) {
+            setInitError("No active project selected.");
+            setRoleLoading(false);
+            setLoading(false);
+          }
+          return;
+        }
+
+        if (!cancelled) {
+          setProjectId(resolvedProjectId);
+        }
+
+        const supabaseClient = createClient();
+        const {
+          data: { user: authUser },
+          error: authError,
+        } = await supabaseClient.auth.getUser();
+
+        if (authError || !authUser) {
+          router.push("/login");
+          return;
+        }
+
+        if (!cancelled) {
+          setUser(authUser);
+        }
+
+        setRoleLoading(true);
+
+        const { data: memberRow, error: memberError } = await supabaseClient
+          .from("project_members")
+          .select("role")
+          .eq("user_id", authUser.id)
+          .eq("project_id", resolvedProjectId)
+          .maybeSingle();
+
+        if (memberError) {
+          throw new Error(memberError.message);
+        }
+
+        let resolvedRole: string;
+        if (!memberRow) {
+          console.warn(
+            "No project_members row found for user; defaulting role to viewer.",
+          );
+          resolvedRole = "viewer";
+        } else {
+          resolvedRole = memberRow.role;
+        }
+
+        if (!cancelled) {
+          setRole(resolvedRole);
+          setRoleLoading(false);
+        }
+
+        const { data: activityRows, error: activitiesError } =
+          await supabaseClient
+            .from("activities")
+            .select("*")
+            .eq("project_id", resolvedProjectId);
+
+        if (activitiesError) {
+          throw new Error(activitiesError.message);
+        }
+
+        const normalizedActivities = (activityRows ?? [])
+          .map((row) =>
+            normalizeMyActivity(row as Record<string, unknown>),
+          )
+          .filter((row): row is MyActivityRow => row !== null);
+
+        const initialProgressMap: Record<string, number> = {};
+        for (const activity of normalizedActivities) {
+          initialProgressMap[activity.activity_id] = activity.progress;
+        }
+
+        if (!cancelled) {
+          setActivities(normalizedActivities);
+          setProgressMap(initialProgressMap);
+          setLoading(false);
+        }
+      } catch {
+        if (!cancelled) {
+          setInitError("Something went wrong. Please refresh the page.");
+          setRoleLoading(false);
+          setLoading(false);
+        }
+      }
+    }
+
+    void initialize();
+
+    return () => {
+      cancelled = true;
+      for (const timeoutId of Object.values(feedbackTimeoutsRef.current)) {
+        clearTimeout(timeoutId);
+      }
+    };
+  }, [router]);
+
+  const setFeedbackWithTimeout = useCallback(
+    (activityId: string, feedback: "saved" | "error" | null) => {
+      const existingTimeout = feedbackTimeoutsRef.current[activityId];
+      if (existingTimeout) {
+        clearTimeout(existingTimeout);
+      }
+
+      setFeedbackMap((previous) => ({ ...previous, [activityId]: feedback }));
+
+      if (feedback !== null) {
+        feedbackTimeoutsRef.current[activityId] = setTimeout(() => {
+          setFeedbackMap((previous) => ({ ...previous, [activityId]: null }));
+        }, 3000);
+      }
+    },
+    [],
+  );
+
+  const handleProgressChange = useCallback(
+    (activityId: string, progress: number) => {
+      setProgressMap((previous) => ({ ...previous, [activityId]: progress }));
+    },
+    [],
+  );
+
+  const handleSave = useCallback(
+    async (activity: MyActivityRow) => {
+      if (!projectId) {
+        return;
+      }
+
+      const activityId = activity.activity_id;
+      const progress = progressMap[activityId] ?? activity.progress;
+
+      setSavingMap((previous) => ({ ...previous, [activityId]: true }));
+      setFeedbackMap((previous) => ({ ...previous, [activityId]: null }));
+
+      try {
+        const response = await fetch("/api/activities/update-progress", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            activity_id: activityId,
+            project_id: projectId,
+            progress,
+          }),
+        });
+
+        if (!response.ok) {
+          setFeedbackWithTimeout(activityId, "error");
+          return;
+        }
+
+        const data = (await response.json()) as UpdateProgressResponse;
+        const updatedActivity = data.activity
+          ? normalizeMyActivity(data.activity)
+          : null;
+
+        if (updatedActivity) {
+          setActivities((previous) =>
+            previous.map((row) =>
+              row.activity_id === activityId ? updatedActivity : row,
+            ),
+          );
+          setProgressMap((previous) => ({
+            ...previous,
+            [activityId]: updatedActivity.progress,
+          }));
+        }
+
+        setFeedbackWithTimeout(activityId, "saved");
+      } catch {
+        setFeedbackWithTimeout(activityId, "error");
+      } finally {
+        setSavingMap((previous) => ({ ...previous, [activityId]: false }));
+      }
+    },
+    [projectId, progressMap, setFeedbackWithTimeout],
+  );
+
+  if (loading) {
+    return (
+      <main className="flex min-h-[50vh] items-center justify-center px-6 py-8">
+        <Loader2 className="h-8 w-8 animate-spin text-zinc-500" aria-hidden />
+      </main>
+    );
+  }
+
+  if (initError) {
+    return (
+      <main className="px-6 py-8">
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/50 dark:text-red-200">
+          {initError}
+        </div>
+      </main>
+    );
+  }
+
+  if (role === "planner" || role === "admin") {
+    return <PlannerAdminActivitiesView />;
+  }
+
+  const isSiteEngineer = role === "site_engineer";
+  const showUpdateColumn = isSiteEngineer && !roleLoading;
+
+  return (
+    <main className="px-6 py-8">
+      <header className="mb-6">
+        <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-100">
+          {isSiteEngineer ? "My Activities" : "Activities"}
+        </h1>
+        {isSiteEngineer && (
+          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+            Activities assigned to you. Update progress below.
+          </p>
+        )}
+      </header>
+
+      {activities.length === 0 ? (
+        <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-8 text-center text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-400">
+          {isSiteEngineer
+            ? "No activities have been assigned to you yet."
+            : "No activities found."}
+        </div>
+      ) : (
+        <MyActivitiesTable
+          activities={activities}
+          showUpdateColumn={showUpdateColumn}
+          progressMap={progressMap}
+          savingMap={savingMap}
+          feedbackMap={feedbackMap}
+          onProgressChange={handleProgressChange}
+          onSave={(activity) => void handleSave(activity)}
         />
       )}
     </main>

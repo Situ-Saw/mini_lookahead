@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import {
   Bar,
@@ -15,6 +16,8 @@ import {
 } from "recharts";
 import { supabase } from "@/lib/supabase";
 import { useActiveProject } from "@/lib/hooks/useActiveProject";
+import { useProjectRole } from "@/lib/hooks/useProjectRole";
+import { hasRoleAccess } from "@/lib/role-access";
 
 const SESSION_LENGTH_DAYS = 14;
 const MS_PER_DAY = 86_400_000;
@@ -338,6 +341,8 @@ function PpcChartTooltip({ active, payload }: ChartTooltipProps) {
 }
 
 export default function PlanningPage() {
+  const router = useRouter();
+  const { role, isRoleLoading } = useProjectRole();
   const { activeProject, isLoading: isProjectLoading } = useActiveProject();
   const [activeSession, setActiveSession] = useState<PlanningSession | null>(
     null,
@@ -513,9 +518,26 @@ export default function PlanningPage() {
   }, []);
 
   useEffect(() => {
-    if (!activeProject) return;
+    if (isRoleLoading) {
+      return;
+    }
+
+    if (!hasRoleAccess(role, "planning")) {
+      router.push("/dashboard");
+    }
+  }, [role, isRoleLoading, router]);
+
+  useEffect(() => {
+    if (
+      !activeProject ||
+      isRoleLoading ||
+      !hasRoleAccess(role, "planning")
+    ) {
+      return;
+    }
+
     void loadData();
-  }, [loadData, activeProject]);
+  }, [loadData, activeProject, isRoleLoading, role]);
 
   const minStartDate = useMemo(
     () => calculateMinStartDate(lastClosedSessionEndDate),
@@ -589,7 +611,11 @@ export default function PlanningPage() {
   const allActivitiesCompleted = useMemo(
     () =>
       sessionActivities.length > 0 &&
-      sessionActivities.every((row) => row.was_completed),
+      sessionActivities.every(
+        (row) =>
+          row.was_completed ||
+          (row.activities?.status?.toLowerCase().includes("complete") ?? false),
+      ),
     [sessionActivities],
   );
 
@@ -923,12 +949,23 @@ export default function PlanningPage() {
     [expandedLogSessions, sessionLogsCache],
   );
 
-  if (isProjectLoading) {
+  if (isProjectLoading || isRoleLoading) {
     return (
       <main className="mx-auto flex min-h-[50vh] w-full max-w-7xl items-center justify-center p-6 sm:p-10">
         <Loader2
           className="h-8 w-8 animate-spin text-zinc-400"
           aria-label="Loading project"
+        />
+      </main>
+    );
+  }
+
+  if (!hasRoleAccess(role, "planning")) {
+    return (
+      <main className="mx-auto flex min-h-[50vh] w-full max-w-7xl items-center justify-center p-6 sm:p-10">
+        <Loader2
+          className="h-8 w-8 animate-spin text-zinc-400"
+          aria-label="Checking access"
         />
       </main>
     );

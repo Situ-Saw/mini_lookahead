@@ -702,7 +702,7 @@ export default function ConstraintsPage() {
     setForm((current) => ({ ...current, ...updates }));
   };
 
-  const handleSave = async () => {
+  const handleSave = useCallback(async () => {
     if (!activeProject) return;
 
     if (!form.constraint_type.trim()) {
@@ -765,7 +765,7 @@ export default function ConstraintsPage() {
     setIsModalOpen(false);
     setEditingConstraint(null);
     setForm(EMPTY_FORM);
-  };
+  }, [activeProject, editingConstraint, form, modalMode]);
 
   const handleCloseConstraint = async (constraint: Constraint) => {
     setRowActionId(constraint.id);

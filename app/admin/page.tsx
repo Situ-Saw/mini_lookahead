@@ -874,7 +874,9 @@ export default function AdminPage() {
                     return (
                       <tr key={user.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-900/40">
                         <td className="px-4 py-3 font-mono text-xs text-zinc-700 dark:text-zinc-300">
-                          {displayUserId(user.email)}
+                          {user.email.endsWith("@lookahead.app")
+                            ? displayUserId(user.email)
+                            : user.email.split("@")[0]}
                         </td>
                         <td className="px-4 py-3 font-medium text-zinc-900 dark:text-zinc-100">
                           {user.name}

@@ -17,7 +17,11 @@ export function useActiveProject() {
   useEffect(() => {
     const stored = localStorage.getItem("active_project");
     if (stored) {
-      setActiveProject(JSON.parse(stored));
+      try {
+        setActiveProject(JSON.parse(stored));
+      } catch {
+        localStorage.removeItem("active_project");
+      }
     }
     setIsLoading(false);
   }, []);
