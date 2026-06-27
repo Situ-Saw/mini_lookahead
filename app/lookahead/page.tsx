@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Loader2, RefreshCw } from "lucide-react";
+import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import { useActiveProject } from "@/lib/hooks/useActiveProject";
 
@@ -20,6 +21,7 @@ type SessionCommittedActivity = {
   status: string | null;
   finish_date: string | null;
   wbs_code: string | null;
+  assignedName: string | null;
 };
 
 type StatusCategory = "not_started" | "in_progress" | "completed" | "other";
@@ -160,15 +162,157 @@ function normalizeSessionActivity(
     status: (activity.status as string | null) ?? null,
     finish_date: (activity.finish_date as string | null) ?? null,
     wbs_code: (activity.wbs_code as string | null) ?? null,
+    assignedName: null,
+  };
+}
+
+async function filterAndEnrichActivities(
+  projectId: string,
+  activities: SessionCommittedActivity[],
+  currentRole: string | null,
+  currentUserId: string | null,
+): Promise<{
+  activities: SessionCommittedActivity[];
+  viewerEngineerMissing: boolean;
+}> {
+  if (activities.length === 0) {
+    return { activities: [], viewerEngineerMissing: false };
+  }
+
+  const activityIds = activities.map((activity) => activity.activity_id);
+
+  const { data: assignmentData, error: assignmentError } = await supabase
+    .from("activities")
+    .select("activity_id, assigned_to")
+    .eq("project_id", projectId)
+    .in("activity_id", activityIds);
+
+  if (assignmentError) {
+    console.error(
+      "Failed to load activity assignments:",
+      assignmentError.message,
+    );
+    return { activities: [], viewerEngineerMissing: false };
+  }
+
+  const assignedToByActivity = new Map<string, string | null>();
+  for (const row of assignmentData ?? []) {
+    if (typeof row.activity_id === "string") {
+      assignedToByActivity.set(
+        row.activity_id,
+        typeof row.assigned_to === "string" ? row.assigned_to : null,
+      );
+    }
+  }
+
+  if (currentRole === "admin" || currentRole === "planner") {
+    const assignedUserIds = [
+      ...new Set(
+        [...assignedToByActivity.values()].filter(
+          (userId): userId is string => typeof userId === "string",
+        ),
+      ),
+    ];
+
+    const nameByUserId: Record<string, string> = {};
+
+    if (assignedUserIds.length > 0) {
+      const { data: profiles, error: profileError } = await supabase
+        .from("profiles")
+        .select("id, name")
+        .in("id", assignedUserIds);
+
+      if (profileError) {
+        console.error(
+          "Failed to load assignee profiles:",
+          profileError.message,
+        );
+      } else {
+        for (const profile of profiles ?? []) {
+          nameByUserId[String(profile.id)] = String(profile.name ?? "");
+        }
+      }
+    }
+
+    return {
+      activities: activities.map((activity) => {
+        const assignedTo =
+          assignedToByActivity.get(activity.activity_id) ?? null;
+
+        return {
+          ...activity,
+          assignedName: assignedTo
+            ? (nameByUserId[assignedTo] ?? null)
+            : null,
+        };
+      }),
+      viewerEngineerMissing: false,
+    };
+  }
+
+  if (currentRole === "site_engineer" && currentUserId) {
+    return {
+      activities: activities
+        .filter(
+          (activity) =>
+            assignedToByActivity.get(activity.activity_id) === currentUserId,
+        )
+        .map((activity) => ({ ...activity, assignedName: null })),
+      viewerEngineerMissing: false,
+    };
+  }
+
+  if (currentRole === "viewer" && currentUserId) {
+    const { data: viewerAssignment, error: viewerError } = await supabase
+      .from("viewer_assignments")
+      .select("engineer_id")
+      .eq("viewer_id", currentUserId)
+      .eq("project_id", projectId)
+      .eq("is_active", true)
+      .maybeSingle();
+
+    if (viewerError) {
+      console.error(
+        "Failed to load viewer assignment:",
+        viewerError.message,
+      );
+      return { activities: [], viewerEngineerMissing: false };
+    }
+
+    if (!viewerAssignment?.engineer_id) {
+      return { activities: [], viewerEngineerMissing: true };
+    }
+
+    const engineerId = viewerAssignment.engineer_id;
+
+    return {
+      activities: activities
+        .filter(
+          (activity) =>
+            assignedToByActivity.get(activity.activity_id) === engineerId,
+        )
+        .map((activity) => ({ ...activity, assignedName: null })),
+      viewerEngineerMissing: false,
+    };
+  }
+
+  return {
+    activities: activities.map((activity) => ({
+      ...activity,
+      assignedName: null,
+    })),
+    viewerEngineerMissing: false,
   };
 }
 
 function ActivityCard({
   activity,
   openConstraints = [],
+  showAssignedLine = false,
 }: {
   activity: SessionCommittedActivity;
   openConstraints?: ActivityConstraint[];
+  showAssignedLine?: boolean;
 }) {
   const [showReasons, setShowReasons] = useState(false);
   const isBlocked = openConstraints.length > 0;
@@ -190,6 +334,19 @@ function ActivityCard({
           <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
             {activity.activity_name}
           </h3>
+          {showAssignedLine && (
+            <p
+              className={
+                activity.assignedName
+                  ? "text-xs text-zinc-500 dark:text-zinc-400"
+                  : "text-xs text-amber-600 dark:text-amber-400"
+              }
+            >
+              {activity.assignedName
+                ? `Assigned to: ${activity.assignedName}`
+                : "Unassigned"}
+            </p>
+          )}
           <p className="text-xs text-zinc-500 dark:text-zinc-400">
             WBS: {activity.wbs_code ?? "—"}
           </p>
@@ -271,14 +428,86 @@ export default function LookaheadPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [currentRole, setCurrentRole] = useState<string | null>(null);
+  const [isRoleLoading, setIsRoleLoading] = useState(true);
+  const [viewerEngineerMissing, setViewerEngineerMissing] = useState(false);
 
   useEffect(() => {
     document.title = "Look Ahead";
   }, []);
 
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    if (!activeProject) {
+      setIsRoleLoading(false);
+      return;
+    }
+
+    const projectId = activeProject.id;
+    let cancelled = false;
+
+    async function loadRole() {
+      try {
+        const {
+          data: { user: authUser },
+          error: authError,
+        } = await supabase.auth.getUser();
+
+        if (authError || !authUser) {
+          if (authError) {
+            console.error("Failed to get current user:", authError.message);
+          }
+          if (!cancelled) {
+            setCurrentUser(null);
+            setCurrentRole("viewer");
+            setIsRoleLoading(false);
+          }
+          return;
+        }
+
+        const { data: memberRow, error: memberError } = await supabase
+          .from("project_members")
+          .select("role")
+          .eq("user_id", authUser.id)
+          .eq("project_id", projectId)
+          .maybeSingle();
+
+        if (memberError) {
+          throw new Error(memberError.message);
+        }
+
+        if (!cancelled) {
+          setCurrentUser(authUser);
+          setCurrentRole(memberRow?.role ?? "viewer");
+          setIsRoleLoading(false);
+        }
+      } catch (error) {
+        console.error("Failed to load user role:", error);
+        if (!cancelled) {
+          setCurrentUser(null);
+          setCurrentRole("viewer");
+          setIsRoleLoading(false);
+        }
+      }
+    }
+
+    void loadRole();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeProject]);
+
+  const showAssignedLine =
+    currentRole === "admin" || currentRole === "planner";
+
   const loadData = useCallback(
     async (options?: { isRefresh?: boolean }) => {
-    if (!activeProject) return;
+    if (!activeProject || isRoleLoading) return;
 
     if (options?.isRefresh) {
       setIsRefreshing(true);
@@ -286,6 +515,7 @@ export default function LookaheadPage() {
       setIsLoading(true);
     }
     setFetchError(null);
+    setViewerEngineerMissing(false);
 
     const { data: sessionData, error: sessionError } = await supabase
       .from("planning_sessions")
@@ -353,9 +583,20 @@ export default function LookaheadPage() {
           return leftDate.getTime() - rightDate.getTime();
         });
 
-      setActivities(normalized);
+      const { activities: filteredActivities, viewerEngineerMissing: missingEngineer } =
+        await filterAndEnrichActivities(
+          activeProject.id,
+          normalized,
+          currentRole,
+          currentUser?.id ?? null,
+        );
 
-      const activityIds = normalized.map((activity) => activity.activity_id);
+      setViewerEngineerMissing(missingEngineer);
+      setActivities(filteredActivities);
+
+      const activityIds = filteredActivities.map(
+        (activity) => activity.activity_id,
+      );
 
       if (activityIds.length === 0) {
         setConstraintsMap({});
@@ -416,13 +657,13 @@ export default function LookaheadPage() {
     setIsLoading(false);
     setIsRefreshing(false);
   },
-    [activeProject],
+    [activeProject, currentRole, currentUser, isRoleLoading],
   );
 
   useEffect(() => {
-    if (!activeProject) return;
+    if (!activeProject || isRoleLoading) return;
     void loadData();
-  }, [loadData, activeProject]);
+  }, [loadData, activeProject, isRoleLoading]);
 
   const remainingCount = useMemo(
     () => activities.filter((activity) => !activity.was_completed).length,
@@ -525,7 +766,7 @@ export default function LookaheadPage() {
         </p>
       )}
 
-      {isLoading ? (
+      {isLoading || isRoleLoading ? (
         <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-12 text-center text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-400">
           Loading look ahead data...
         </div>
@@ -595,8 +836,11 @@ export default function LookaheadPage() {
 
           {activities.length === 0 ? (
             <p className="rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-8 text-center text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-400">
-              No tasks assigned yet. Ask your supervisor to update the weekly
-              work plan.
+              {viewerEngineerMissing
+                ? "No engineer assigned to your account yet."
+                : currentRole === "site_engineer"
+                  ? "No activities assigned to you yet for this session."
+                  : "No tasks assigned yet. Ask your supervisor to update the weekly work plan."}
             </p>
           ) : visibleActivities.length === 0 ? (
             <p className="rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-8 text-center text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-400">
@@ -608,6 +852,7 @@ export default function LookaheadPage() {
                 <ActivityCard
                   key={activity.activity_id}
                   activity={activity}
+                  showAssignedLine={showAssignedLine}
                   openConstraints={
                     constraintsMap[activity.activity_id] ?? []
                   }

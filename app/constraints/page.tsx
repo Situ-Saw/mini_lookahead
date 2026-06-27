@@ -531,11 +531,13 @@ function ConstraintModal({
               id="constraint-raised-by"
               type="text"
               value={form.raised_by}
-              disabled={isSaving}
-              onChange={(event) => onChange({ raised_by: event.target.value })}
+              disabled
               placeholder="Optional"
               className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
             />
+            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+              Auto-filled from your account. Cannot be changed.
+            </p>
           </div>
 
           <div>
@@ -622,9 +624,53 @@ export default function ConstraintsPage() {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [rowActionId, setRowActionId] = useState<string | null>(null);
   const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
+  const [currentUserName, setCurrentUserName] = useState("");
 
   useEffect(() => {
     document.title = "Constraint Register";
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadCurrentUserName() {
+      try {
+        const {
+          data: { user },
+          error: authError,
+        } = await supabase.auth.getUser();
+
+        if (authError || !user) {
+          if (authError) {
+            console.error("Failed to get current user:", authError.message);
+          }
+          return;
+        }
+
+        const { data: profile, error: profileError } = await supabase
+          .from("profiles")
+          .select("name")
+          .eq("id", user.id)
+          .maybeSingle();
+
+        if (profileError) {
+          console.error("Failed to load profile name:", profileError.message);
+          return;
+        }
+
+        if (!cancelled && typeof profile?.name === "string") {
+          setCurrentUserName(profile.name);
+        }
+      } catch (error) {
+        console.error("Failed to load current user name:", error);
+      }
+    }
+
+    void loadCurrentUserName();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const loadConstraints = useCallback(async (projectId: string) => {
@@ -677,7 +723,7 @@ export default function ConstraintsPage() {
   const openAddModal = () => {
     setModalMode("add");
     setEditingConstraint(null);
-    setForm(EMPTY_FORM);
+    setForm({ ...EMPTY_FORM, raised_by: currentUserName });
     setSaveError(null);
     setIsModalOpen(true);
   };

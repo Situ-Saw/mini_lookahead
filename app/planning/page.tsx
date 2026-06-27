@@ -103,6 +103,119 @@ type ChartDatum = {
 
 type StatusCategory = "not_started" | "in_progress" | "completed" | "other";
 
+type ProjectEngineer = {
+  user_id: string;
+  name: string;
+};
+
+type ActivityAssignment = {
+  user_id: string;
+  name: string;
+};
+
+async function loadProjectEngineers(
+  projectId: string,
+): Promise<ProjectEngineer[]> {
+  const { data: members, error: memberError } = await supabase
+    .from("project_members")
+    .select("user_id")
+    .eq("project_id", projectId)
+    .eq("role", "site_engineer");
+
+  if (memberError) {
+    console.error("Failed to load site engineers:", memberError.message);
+    return [];
+  }
+
+  const userIds = (members ?? [])
+    .map((member) => member.user_id)
+    .filter((userId): userId is string => typeof userId === "string");
+
+  if (userIds.length === 0) {
+    return [];
+  }
+
+  const { data: profiles, error: profileError } = await supabase
+    .from("profiles")
+    .select("id, name")
+    .in("id", userIds)
+    .order("name", { ascending: true });
+
+  if (profileError) {
+    console.error("Failed to load engineer profiles:", profileError.message);
+    return [];
+  }
+
+  return (profiles ?? []).map((profile) => ({
+    user_id: String(profile.id),
+    name: String(profile.name ?? ""),
+  }));
+}
+
+async function loadAssignmentMap(
+  projectId: string,
+  activityIds: string[],
+): Promise<Record<string, ActivityAssignment | null>> {
+  const map: Record<string, ActivityAssignment | null> = {};
+
+  for (const activityId of activityIds) {
+    map[activityId] = null;
+  }
+
+  if (activityIds.length === 0) {
+    return map;
+  }
+
+  const { data, error } = await supabase
+    .from("activities")
+    .select("activity_id, assigned_to")
+    .eq("project_id", projectId)
+    .in("activity_id", activityIds);
+
+  if (error) {
+    console.error("Failed to load activity assignments:", error.message);
+    return map;
+  }
+
+  const assignedUserIds = [
+    ...new Set(
+      (data ?? [])
+        .map((row) => row.assigned_to)
+        .filter((userId): userId is string => typeof userId === "string"),
+    ),
+  ];
+
+  const nameByUserId: Record<string, string> = {};
+
+  if (assignedUserIds.length > 0) {
+    const { data: profiles, error: profileError } = await supabase
+      .from("profiles")
+      .select("id, name")
+      .in("id", assignedUserIds);
+
+    if (profileError) {
+      console.error("Failed to load assignee profiles:", profileError.message);
+    } else {
+      for (const profile of profiles ?? []) {
+        nameByUserId[String(profile.id)] = String(profile.name ?? "Unknown");
+      }
+    }
+  }
+
+  for (const row of data ?? []) {
+    if (typeof row.activity_id !== "string" || !row.assigned_to) {
+      continue;
+    }
+
+    map[row.activity_id] = {
+      user_id: row.assigned_to,
+      name: nameByUserId[row.assigned_to] ?? "Unknown",
+    };
+  }
+
+  return map;
+}
+
 function parseDateOnly(value: string | null): Date | null {
   if (!value) return null;
 
@@ -382,12 +495,29 @@ export default function PlanningPage() {
     Record<string, DailyLog[]>
   >({});
   const [loadingLogsFor, setLoadingLogsFor] = useState<string | null>(null);
+  const [engineers, setEngineers] = useState<ProjectEngineer[]>([]);
+  const [assignmentMap, setAssignmentMap] = useState<
+    Record<string, ActivityAssignment | null>
+  >({});
+  const [savingAssignMap, setSavingAssignMap] = useState<Record<string, boolean>>(
+    {},
+  );
+  const [assignErrors, setAssignErrors] = useState<Record<string, string>>({});
+  const [reassigningActivityIds, setReassigningActivityIds] = useState<
+    Set<string>
+  >(new Set());
+
+  const canManageAssignments =
+    role === "admin" || role === "planner";
 
   const loadData = useCallback(async () => {
     if (!activeProject) return;
 
     setIsLoading(true);
     setFetchError(null);
+
+    const engineersList = await loadProjectEngineers(activeProject.id);
+    setEngineers(engineersList);
 
     const { data: activeData, error: activeError } = await supabase
       .from("planning_sessions")
@@ -403,6 +533,8 @@ export default function PlanningPage() {
       setSessionActivities([]);
       setDailyLogs([]);
       setClosedSessions([]);
+      setAssignmentMap({});
+      setReassigningActivityIds(new Set());
       setIsLoading(false);
       return;
     }
@@ -443,12 +575,13 @@ export default function PlanningPage() {
         setFetchError(activitiesResult.error.message);
         setSessionActivities([]);
         setDailyLogs([]);
+        setAssignmentMap({});
+        setReassigningActivityIds(new Set());
       } else {
-        setSessionActivities(
-          (activitiesResult.data ?? []).map((row) =>
-            normalizeSessionActivityRow(row as Record<string, unknown>),
-          ),
+        const normalizedActivities = (activitiesResult.data ?? []).map((row) =>
+          normalizeSessionActivityRow(row as Record<string, unknown>),
         );
+        setSessionActivities(normalizedActivities);
         setDailyLogs(
           logsResult.error
             ? []
@@ -457,10 +590,20 @@ export default function PlanningPage() {
         if (logsResult.error) {
           setActionError(logsResult.error.message);
         }
+
+        const activityIds = normalizedActivities.map((row) => row.activity_id);
+        const nextAssignmentMap = await loadAssignmentMap(
+          activeProject.id,
+          activityIds,
+        );
+        setAssignmentMap(nextAssignmentMap);
+        setReassigningActivityIds(new Set());
       }
     } else {
       setSessionActivities([]);
       setDailyLogs([]);
+      setAssignmentMap({});
+      setReassigningActivityIds(new Set());
     }
 
     const [closedResult, lastClosedResult] = await Promise.all([
@@ -693,6 +836,70 @@ export default function PlanningPage() {
       );
     },
     [],
+  );
+
+  const handleAssign = useCallback(
+    async (activityId: string, userId: string) => {
+      if (!activeProject || !activeSession) {
+        return;
+      }
+
+      setSavingAssignMap((current) => ({ ...current, [activityId]: true }));
+      setAssignErrors((current) => {
+        const next = { ...current };
+        delete next[activityId];
+        return next;
+      });
+
+      const { error: activitiesError } = await supabase
+        .from("activities")
+        .update({ assigned_to: userId })
+        .eq("activity_id", activityId)
+        .eq("project_id", activeProject.id);
+
+      if (activitiesError) {
+        setAssignErrors((current) => ({
+          ...current,
+          [activityId]: activitiesError.message,
+        }));
+        setSavingAssignMap((current) => ({ ...current, [activityId]: false }));
+        return;
+      }
+
+      const { error: sessionActivitiesError } = await supabase
+        .from("session_activities")
+        .update({ assigned_to: userId })
+        .eq("session_id", activeSession.id)
+        .eq("activity_id", activityId);
+
+      if (sessionActivitiesError) {
+        setAssignErrors((current) => ({
+          ...current,
+          [activityId]: sessionActivitiesError.message,
+        }));
+        setSavingAssignMap((current) => ({ ...current, [activityId]: false }));
+        return;
+      }
+
+      const assignedEngineer = engineers.find(
+        (engineer) => engineer.user_id === userId,
+      );
+
+      setAssignmentMap((current) => ({
+        ...current,
+        [activityId]: {
+          user_id: userId,
+          name: assignedEngineer?.name ?? "Unknown",
+        },
+      }));
+      setReassigningActivityIds((current) => {
+        const next = new Set(current);
+        next.delete(activityId);
+        return next;
+      });
+      setSavingAssignMap((current) => ({ ...current, [activityId]: false }));
+    },
+    [activeProject, activeSession, engineers],
   );
 
   const handleMarkInProgress = useCallback(
@@ -1083,6 +1290,11 @@ export default function PlanningPage() {
                     <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
                       Status
                     </th>
+                    {canManageAssignments && (
+                      <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+                        Assignment
+                      </th>
+                    )}
                     <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
                       Action
                     </th>
@@ -1106,6 +1318,88 @@ export default function PlanningPage() {
                       <td className="whitespace-nowrap px-4 py-3">
                         <StatusBadge status={row.activities?.status ?? null} />
                       </td>
+                      {canManageAssignments && (
+                        <td className="whitespace-nowrap px-4 py-3">
+                          {(() => {
+                            const assignment = assignmentMap[row.activity_id];
+                            const isSavingAssign =
+                              savingAssignMap[row.activity_id] === true;
+                            const assignError = assignErrors[row.activity_id];
+                            const showDropdown =
+                              !assignment ||
+                              reassigningActivityIds.has(row.activity_id);
+
+                            if (showDropdown) {
+                              return (
+                                <div className="space-y-1">
+                                  <select
+                                    value=""
+                                    disabled={isSavingAssign}
+                                    onChange={(event) => {
+                                      const selectedUserId =
+                                        event.target.value;
+                                      if (!selectedUserId) {
+                                        return;
+                                      }
+                                      void handleAssign(
+                                        row.activity_id,
+                                        selectedUserId,
+                                      );
+                                    }}
+                                    className="rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-xs text-zinc-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+                                  >
+                                    <option value="" disabled>
+                                      {isSavingAssign
+                                        ? "Saving..."
+                                        : "Assign to..."}
+                                    </option>
+                                    {engineers.map((engineer) => (
+                                      <option
+                                        key={engineer.user_id}
+                                        value={engineer.user_id}
+                                      >
+                                        {engineer.name}
+                                      </option>
+                                    ))}
+                                  </select>
+                                  {assignError && (
+                                    <p className="text-xs text-red-600 dark:text-red-400">
+                                      {assignError}
+                                    </p>
+                                  )}
+                                </div>
+                              );
+                            }
+
+                            return (
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-800 ring-1 ring-inset ring-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-200 dark:ring-emerald-900">
+                                  {assignment.name}
+                                </span>
+                                <button
+                                  type="button"
+                                  disabled={isSavingAssign}
+                                  onClick={() =>
+                                    setReassigningActivityIds((current) => {
+                                      const next = new Set(current);
+                                      next.add(row.activity_id);
+                                      return next;
+                                    })
+                                  }
+                                  className="text-xs font-medium text-zinc-600 underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:opacity-50 dark:text-zinc-400"
+                                >
+                                  Reassign
+                                </button>
+                                {assignError && (
+                                  <p className="w-full text-xs text-red-600 dark:text-red-400">
+                                    {assignError}
+                                  </p>
+                                )}
+                              </div>
+                            );
+                          })()}
+                        </td>
+                      )}
                       <td className="whitespace-nowrap px-4 py-3">
                         {(() => {
                           const status = row.activities?.status ?? null;
