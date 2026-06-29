@@ -830,12 +830,12 @@ export default function DashboardPage() {
         </section>
 
         <section>
-          <SectionHeader title="Overall Completion %" />
+          <SectionHeader title="Project Completion" />
           <div
             className={`rounded-xl border border-zinc-200 bg-gradient-to-br p-6 shadow-sm dark:border-zinc-800 sm:p-8 ${ppcColors.gradient}`}
           >
             <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-              Overall Completion %
+              Project Completion
             </h2>
 
             {isLoading ? (
@@ -862,7 +862,7 @@ export default function DashboardPage() {
                   <p
                     className={`text-6xl font-bold tracking-tight sm:text-7xl ${ppcColors.text}`}
                   >
-                    {ppc.toFixed(1)}% Complete
+                    {ppc.toFixed(1)}% of activities completed
                   </p>
 
                   <div className="mt-6 h-3 w-full overflow-hidden rounded-full bg-zinc-200/80 dark:bg-zinc-800">
@@ -883,8 +883,10 @@ export default function DashboardPage() {
                   </p>
 
                   <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-500">
-                    Overall project completion based on activities marked
-                    complete. See Planning page for session-based PPC.
+                    This shows overall project progress — how many activities
+                    are marked complete out of the total. This is different
+                    from PPC (Percent Plan Complete), which measures weekly
+                    planning reliability and is tracked on the Planning page.
                   </p>
                 </div>
               </div>
