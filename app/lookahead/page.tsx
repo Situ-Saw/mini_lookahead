@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Loader2, RefreshCw } from "lucide-react";
+import { ChevronDown, Loader2, RefreshCw } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import { useActiveProject } from "@/lib/hooks/useActiveProject";
@@ -427,7 +427,7 @@ export default function LookaheadPage() {
     Record<string, ActivityConstraint[]>
   >({});
   const [showBlockedOnly, setShowBlockedOnly] = useState(false);
-  const [showCompletedSection, setShowCompletedSection] = useState(false);
+  const [showCompleted, setShowCompleted] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -895,11 +895,18 @@ export default function LookaheadPage() {
           ) : (
             <div className="space-y-8">
               <section>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400">
-                    Remaining
-                  </span>
-                  <div className="h-px flex-1 bg-zinc-200 dark:bg-zinc-700" />
+                <div
+                  className="flex items-center justify-between rounded-xl border border-amber-200 bg-amber-50 px-5 py-3 dark:border-amber-900/50 dark:bg-amber-950/30"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="h-2.5 w-2.5 rounded-full bg-amber-500" />
+                    <span className="text-sm font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
+                      Remaining
+                    </span>
+                    <span className="rounded-full bg-amber-200 px-2.5 py-0.5 text-xs font-bold text-amber-800 dark:bg-amber-900 dark:text-amber-200">
+                      {notCompletedActivities.length}
+                    </span>
+                  </div>
                 </div>
 
                 {notCompletedActivities.length === 0 ? (
@@ -907,51 +914,52 @@ export default function LookaheadPage() {
                     All activities completed! 🎉
                   </p>
                 ) : (
-                  <>
-                    <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-                      {notCompletedActivities.length} activit
-                      {notCompletedActivities.length === 1 ? "y" : "ies"}{" "}
-                      remaining
-                    </p>
-                    <div className="mt-4 space-y-3">
-                      {notCompletedActivities.map((activity) => (
-                        <ActivityCard
-                          key={activity.activity_id}
-                          activity={activity}
-                          showAssignedLine={showAssignedLine}
-                          openConstraints={
-                            constraintsMap[activity.activity_id] ?? []
-                          }
-                        />
-                      ))}
-                    </div>
-                  </>
+                  <div className="mt-4 space-y-3">
+                    {notCompletedActivities.map((activity) => (
+                      <ActivityCard
+                        key={activity.activity_id}
+                        activity={activity}
+                        showAssignedLine={showAssignedLine}
+                        openConstraints={
+                          constraintsMap[activity.activity_id] ?? []
+                        }
+                      />
+                    ))}
+                  </div>
                 )}
               </section>
 
               {completedActivities.length > 0 && (
                 <section>
-                  <div className="flex flex-wrap items-center gap-3">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
-                      Completed
-                    </span>
-                    <div className="h-px min-w-[2rem] flex-1 bg-zinc-200 dark:bg-zinc-700" />
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setShowCompletedSection((current) => !current)
-                      }
-                      className="text-sm font-medium text-emerald-700 transition-colors hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-300"
-                    >
-                      {showCompletedSection ? "▼" : "▶"} Completed (
-                      {completedActivities.length})
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowCompleted((prev) => !prev)}
+                    className="flex w-full items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-5 py-3 text-left transition-colors hover:bg-emerald-100 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:hover:bg-emerald-950/50"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
+                      <span className="text-sm font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
+                        Completed
+                      </span>
+                      <span className="rounded-full bg-emerald-200 px-2.5 py-0.5 text-xs font-bold text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200">
+                        {completedActivities.length}
+                      </span>
+                    </div>
+                    <ChevronDown
+                      className={`h-4 w-4 text-emerald-600 transition-transform duration-200 dark:text-emerald-400 ${
+                        showCompleted ? "rotate-180" : ""
+                      }`}
+                      aria-hidden="true"
+                    />
+                  </button>
 
-                  {showCompletedSection && (
-                    <div className="mt-4 space-y-3">
+                  {showCompleted && (
+                    <div className="mt-3 space-y-3 border-t border-emerald-100 pt-3 dark:border-emerald-900/30">
                       {completedActivities.map((activity) => (
-                        <div key={activity.activity_id} className="opacity-60">
+                        <div
+                          key={activity.activity_id}
+                          className="opacity-70 [&>article]:border-l-emerald-500"
+                        >
                           <ActivityCard
                             activity={activity}
                             showAssignedLine={showAssignedLine}

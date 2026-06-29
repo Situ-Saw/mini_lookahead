@@ -32,6 +32,8 @@ type Engineer = {
   email: string;
 };
 
+type MyActivityFilter = "all" | "completed" | "not_completed";
+
 type MyActivityRow = {
   id: string;
   project_id: string;
@@ -43,6 +45,10 @@ type MyActivityRow = {
   finish_date: string | null;
   delay_days: number | null;
 };
+
+function isMyActivityCompleted(activity: MyActivityRow): boolean {
+  return activity.status === "Completed" || activity.progress >= 100;
+}
 
 type AssignedViewer = {
   id: string;
@@ -135,9 +141,78 @@ function MyActivitiesTable({
   onSave: (activity: MyActivityRow) => void;
   onOpenHistory: (activityId: string) => void;
 }) {
+  const innerRef = useRef<HTMLDivElement>(null);
+  const outerRef = useRef<HTMLDivElement>(null);
+  const tableRef = useRef<HTMLTableElement>(null);
+  const isSyncingScroll = useRef(false);
+  const [tableWidth, setTableWidth] = useState(0);
+
+  const updateTableWidth = useCallback(() => {
+    if (tableRef.current) {
+      setTableWidth(tableRef.current.scrollWidth);
+    }
+  }, []);
+
+  useEffect(() => {
+    updateTableWidth();
+
+    const resizeObserver = new ResizeObserver(() => {
+      updateTableWidth();
+    });
+
+    if (tableRef.current) {
+      resizeObserver.observe(tableRef.current);
+    }
+
+    window.addEventListener("resize", updateTableWidth);
+
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", updateTableWidth);
+    };
+  }, [activities, updateTableWidth]);
+
+  const handleInnerScroll = useCallback(
+    (event: React.UIEvent<HTMLDivElement>) => {
+      if (isSyncingScroll.current) return;
+
+      isSyncingScroll.current = true;
+      if (outerRef.current) {
+        outerRef.current.scrollLeft = event.currentTarget.scrollLeft;
+      }
+      requestAnimationFrame(() => {
+        isSyncingScroll.current = false;
+      });
+    },
+    [],
+  );
+
+  const handleOuterScroll = useCallback(
+    (event: React.UIEvent<HTMLDivElement>) => {
+      if (isSyncingScroll.current) return;
+
+      isSyncingScroll.current = true;
+      if (innerRef.current) {
+        innerRef.current.scrollLeft = event.currentTarget.scrollLeft;
+      }
+      requestAnimationFrame(() => {
+        isSyncingScroll.current = false;
+      });
+    },
+    [],
+  );
+
   return (
-    <div className="overflow-x-auto rounded-lg border border-zinc-200 shadow-sm dark:border-zinc-800">
-      <table className="min-w-full divide-y divide-zinc-200 text-left text-sm dark:divide-zinc-800">
+    <div className="w-full rounded-lg border border-zinc-200 shadow-sm dark:border-zinc-800">
+      <div
+        ref={innerRef}
+        onScroll={handleInnerScroll}
+        className="w-full overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+      >
+        <table
+          ref={tableRef}
+          className="min-w-full divide-y divide-zinc-200 text-left text-sm dark:divide-zinc-800"
+        >
         <thead className="bg-zinc-50 dark:bg-zinc-900/60">
           <tr>
             <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
@@ -272,6 +347,15 @@ function MyActivitiesTable({
           })}
         </tbody>
       </table>
+      </div>
+
+      <div
+        ref={outerRef}
+        onScroll={handleOuterScroll}
+        className="sticky bottom-0 z-10 overflow-x-auto overflow-y-hidden border-t border-zinc-200 bg-white scrollbar scrollbar-thin scrollbar-thumb-rounded scrollbar-thumb-zinc-400 scrollbar-track-zinc-100 dark:border-zinc-800 dark:bg-zinc-950 dark:scrollbar-track-zinc-800 dark:scrollbar-thumb-zinc-600"
+      >
+        <div aria-hidden="true" style={{ width: tableWidth }} className="h-px" />
+      </div>
     </div>
   );
 }
@@ -2081,6 +2165,8 @@ export default function ActivitiesPage() {
   const [historyEntries, setHistoryEntries] = useState<HistoryEntry[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
+  const [myActivityFilter, setMyActivityFilter] =
+    useState<MyActivityFilter>("all");
   const feedbackTimeoutsRef = useRef<
     Record<string, ReturnType<typeof setTimeout>>
   >({});
@@ -2338,6 +2424,31 @@ export default function ActivitiesPage() {
     setIsLoadingHistory(false);
   }, []);
 
+  const myActivityCounts = useMemo(
+    () => ({
+      all: activities.length,
+      completed: activities.filter((activity) =>
+        isMyActivityCompleted(activity),
+      ).length,
+      not_completed: activities.filter(
+        (activity) => !isMyActivityCompleted(activity),
+      ).length,
+    }),
+    [activities],
+  );
+
+  const filteredMyActivities = useMemo(() => {
+    if (myActivityFilter === "all") {
+      return activities;
+    }
+
+    if (myActivityFilter === "completed") {
+      return activities.filter((activity) => isMyActivityCompleted(activity));
+    }
+
+    return activities.filter((activity) => !isMyActivityCompleted(activity));
+  }, [activities, myActivityFilter]);
+
   if (loading) {
     return (
       <main className="flex min-h-[50vh] items-center justify-center px-6 py-8">
@@ -2402,17 +2513,52 @@ export default function ActivitiesPage() {
             : "No activities found."}
         </div>
       ) : (
-        <MyActivitiesTable
-          activities={activities}
-          showUpdateColumn={showUpdateColumn}
-          showHistoryButton={showHistoryButton}
-          progressMap={progressMap}
-          savingMap={savingMap}
-          feedbackMap={feedbackMap}
-          onProgressChange={handleProgressChange}
-          onSave={(activity) => void handleSave(activity)}
-          onOpenHistory={(activityId) => void handleOpenHistory(activityId)}
-        />
+        <>
+          <div className="mb-4 flex gap-2">
+            {(
+              [
+                { value: "all" as const, label: "All" },
+                { value: "completed" as const, label: "Completed" },
+                { value: "not_completed" as const, label: "Not Completed" },
+              ] as const
+            ).map(({ value, label }) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setMyActivityFilter(value)}
+                className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
+                  myActivityFilter === value
+                    ? value === "completed"
+                      ? "bg-emerald-600 text-white"
+                      : value === "not_completed"
+                        ? "bg-amber-500 text-white"
+                        : "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+                    : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                }`}
+              >
+                {label} ({myActivityCounts[value]})
+              </button>
+            ))}
+          </div>
+
+          {filteredMyActivities.length === 0 ? (
+            <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-8 text-center text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-400">
+              No activities match this filter.
+            </div>
+          ) : (
+            <MyActivitiesTable
+              activities={filteredMyActivities}
+              showUpdateColumn={showUpdateColumn}
+              showHistoryButton={showHistoryButton}
+              progressMap={progressMap}
+              savingMap={savingMap}
+              feedbackMap={feedbackMap}
+              onProgressChange={handleProgressChange}
+              onSave={(activity) => void handleSave(activity)}
+              onOpenHistory={(activityId) => void handleOpenHistory(activityId)}
+            />
+          )}
+        </>
       )}
 
       {historyActivityId && (
