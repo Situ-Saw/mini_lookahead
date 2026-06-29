@@ -127,6 +127,8 @@ function MyActivitiesTable({
   progressMap,
   savingMap,
   feedbackMap,
+  openConstraintsMap,
+  blockErrorMap,
   onProgressChange,
   onSave,
   onOpenHistory,
@@ -137,6 +139,8 @@ function MyActivitiesTable({
   progressMap: Record<string, number>;
   savingMap: Record<string, boolean>;
   feedbackMap: Record<string, "saved" | "error" | null>;
+  openConstraintsMap: Record<string, boolean>;
+  blockErrorMap: Record<string, boolean>;
   onProgressChange: (activityId: string, progress: number) => void;
   onSave: (activity: MyActivityRow) => void;
   onOpenHistory: (activityId: string) => void;
@@ -252,6 +256,10 @@ function MyActivitiesTable({
           {activities.map((activity) => {
             const isSaving = savingMap[activity.activity_id] === true;
             const feedback = feedbackMap[activity.activity_id] ?? null;
+            const isBlocked = openConstraintsMap[activity.activity_id] === true;
+            const currentProgress =
+              progressMap[activity.activity_id] ?? activity.progress;
+            const hasBlockError = blockErrorMap[activity.activity_id] === true;
 
             return (
               <tr
@@ -281,22 +289,27 @@ function MyActivitiesTable({
                 </td>
                 {showUpdateColumn && (
                   <td className="whitespace-nowrap px-4 py-3">
-                    <div className="flex flex-col gap-2">
+                    <div
+                      className={`flex flex-col ${isBlocked ? "gap-1" : "gap-2"}`}
+                    >
                       <div className="flex items-center gap-2">
                         <input
                           type="number"
                           min={0}
-                          max={100}
+                          max={isBlocked ? 99 : 100}
                           step={5}
-                          value={
-                            progressMap[activity.activity_id] ?? activity.progress
-                          }
-                          onChange={(event) =>
-                            onProgressChange(
-                              activity.activity_id,
-                              Number(event.target.value),
-                            )
-                          }
+                          value={currentProgress}
+                          onChange={(event) => {
+                            let nextValue = Number(event.target.value);
+                            if (
+                              isBlocked &&
+                              !Number.isNaN(nextValue) &&
+                              nextValue >= 100
+                            ) {
+                              nextValue = 99;
+                            }
+                            onProgressChange(activity.activity_id, nextValue);
+                          }}
                           disabled={isSaving}
                           className="w-20 rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm text-zinc-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
                         />
@@ -311,13 +324,25 @@ function MyActivitiesTable({
                         {showHistoryButton && (
                           <button
                             type="button"
-                            onClick={() => onOpenHistory(activity.activity_id)}
+                            onClick={() =>
+                              onOpenHistory(activity.activity_id)
+                            }
                             className="rounded border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
                           >
                             History
                           </button>
                         )}
                       </div>
+                      {isBlocked && currentProgress < 100 && (
+                        <p className="text-xs text-amber-600 dark:text-amber-400">
+                          ⚠ Has open constraints — cannot mark 100% complete
+                        </p>
+                      )}
+                      {hasBlockError && (
+                        <p className="text-xs text-red-600 dark:text-red-400">
+                          ✗ Close all constraints before marking complete
+                        </p>
+                      )}
                       {feedback === "saved" && (
                         <p className="text-xs text-emerald-600 dark:text-emerald-400">
                           ✓ Saved
@@ -2167,7 +2192,16 @@ export default function ActivitiesPage() {
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [myActivityFilter, setMyActivityFilter] =
     useState<MyActivityFilter>("all");
+  const [openConstraintsMap, setOpenConstraintsMap] = useState<
+    Record<string, boolean>
+  >({});
+  const [blockErrorMap, setBlockErrorMap] = useState<Record<string, boolean>>(
+    {},
+  );
   const feedbackTimeoutsRef = useRef<
+    Record<string, ReturnType<typeof setTimeout>>
+  >({});
+  const blockErrorTimeoutsRef = useRef<
     Record<string, ReturnType<typeof setTimeout>>
   >({});
 
@@ -2290,6 +2324,40 @@ export default function ActivitiesPage() {
           initialProgressMap[activity.activity_id] = activity.progress;
         }
 
+        const activityIds = normalizedActivities.map(
+          (activity) => activity.activity_id,
+        );
+
+        if (activityIds.length > 0) {
+          const { data: constraintRows, error: constraintError } =
+            await supabaseClient
+              .from("constraints")
+              .select("activity_id")
+              .eq("project_id", resolvedProjectId)
+              .eq("status", "Open")
+              .in("activity_id", activityIds);
+
+          if (!cancelled) {
+            if (!constraintError && constraintRows) {
+              const map: Record<string, boolean> = {};
+              for (const row of constraintRows) {
+                if (typeof row.activity_id === "string") {
+                  map[row.activity_id] = true;
+                }
+              }
+              setOpenConstraintsMap(map);
+            } else if (constraintError) {
+              console.error(
+                "Failed to load constraints:",
+                constraintError.message,
+              );
+              setOpenConstraintsMap({});
+            }
+          }
+        } else if (!cancelled) {
+          setOpenConstraintsMap({});
+        }
+
         if (!cancelled) {
           setActivities(normalizedActivities);
           setProgressMap(initialProgressMap);
@@ -2309,6 +2377,9 @@ export default function ActivitiesPage() {
     return () => {
       cancelled = true;
       for (const timeoutId of Object.values(feedbackTimeoutsRef.current)) {
+        clearTimeout(timeoutId);
+      }
+      for (const timeoutId of Object.values(blockErrorTimeoutsRef.current)) {
         clearTimeout(timeoutId);
       }
     };
@@ -2332,6 +2403,19 @@ export default function ActivitiesPage() {
     [],
   );
 
+  const setBlockErrorWithTimeout = useCallback((activityId: string) => {
+    const existingTimeout = blockErrorTimeoutsRef.current[activityId];
+    if (existingTimeout) {
+      clearTimeout(existingTimeout);
+    }
+
+    setBlockErrorMap((previous) => ({ ...previous, [activityId]: true }));
+
+    blockErrorTimeoutsRef.current[activityId] = setTimeout(() => {
+      setBlockErrorMap((previous) => ({ ...previous, [activityId]: false }));
+    }, 4000);
+  }, []);
+
   const handleProgressChange = useCallback(
     (activityId: string, progress: number) => {
       setProgressMap((previous) => ({ ...previous, [activityId]: progress }));
@@ -2346,7 +2430,15 @@ export default function ActivitiesPage() {
       }
 
       const activityId = activity.activity_id;
-      const progress = progressMap[activityId] ?? activity.progress;
+      const isBlocked = openConstraintsMap[activityId] === true;
+      const safeProgress = progressMap[activityId] ?? activity.progress;
+
+      if (isBlocked && safeProgress >= 100) {
+        setBlockErrorWithTimeout(activityId);
+        return;
+      }
+
+      const progress = safeProgress;
 
       setSavingMap((previous) => ({ ...previous, [activityId]: true }));
       setFeedbackMap((previous) => ({ ...previous, [activityId]: null }));
@@ -2385,13 +2477,45 @@ export default function ActivitiesPage() {
         }
 
         setFeedbackWithTimeout(activityId, "saved");
+        setBlockErrorMap((previous) => ({ ...previous, [activityId]: false }));
+
+        const existingBlockTimeout = blockErrorTimeoutsRef.current[activityId];
+        if (existingBlockTimeout) {
+          clearTimeout(existingBlockTimeout);
+        }
+
+        const { data: updatedConstraints, error: constraintsRefreshError } =
+          await supabase
+            .from("constraints")
+            .select("activity_id")
+            .eq("project_id", projectId)
+            .eq("status", "Open")
+            .eq("activity_id", activityId);
+
+        if (!constraintsRefreshError) {
+          setOpenConstraintsMap((previous) => ({
+            ...previous,
+            [activityId]: (updatedConstraints ?? []).length > 0,
+          }));
+        } else {
+          console.error(
+            "Failed to refresh constraints:",
+            constraintsRefreshError.message,
+          );
+        }
       } catch {
         setFeedbackWithTimeout(activityId, "error");
       } finally {
         setSavingMap((previous) => ({ ...previous, [activityId]: false }));
       }
     },
-    [projectId, progressMap, setFeedbackWithTimeout],
+    [
+      openConstraintsMap,
+      projectId,
+      progressMap,
+      setBlockErrorWithTimeout,
+      setFeedbackWithTimeout,
+    ],
   );
 
   const handleOpenHistory = useCallback(
@@ -2553,6 +2677,8 @@ export default function ActivitiesPage() {
               progressMap={progressMap}
               savingMap={savingMap}
               feedbackMap={feedbackMap}
+              openConstraintsMap={openConstraintsMap}
+              blockErrorMap={blockErrorMap}
               onProgressChange={handleProgressChange}
               onSave={(activity) => void handleSave(activity)}
               onOpenHistory={(activityId) => void handleOpenHistory(activityId)}
