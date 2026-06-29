@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS profiles (
   name          TEXT        NOT NULL,
   email         TEXT        NOT NULL,
   global_role   TEXT        NOT NULL DEFAULT 'viewer',
+  is_active     BOOLEAN     NOT NULL DEFAULT true,
   created_at    TIMESTAMPTZ DEFAULT now(),
   PRIMARY KEY (id)
 );
@@ -215,6 +216,7 @@ CREATE TABLE IF NOT EXISTS session_activities (
   activity_id     TEXT        NOT NULL,
   assigned_to     UUID        REFERENCES profiles(id) ON DELETE SET NULL,
   was_completed   BOOLEAN     DEFAULT false,
+  variance_reason TEXT,
   completed_at    TIMESTAMPTZ,
   created_at      TIMESTAMPTZ DEFAULT now(),
   PRIMARY KEY (id),
@@ -224,7 +226,7 @@ CREATE TABLE IF NOT EXISTS session_activities (
 -- Daily logs per session
 CREATE TABLE IF NOT EXISTS session_daily_logs (
   id          UUID        NOT NULL DEFAULT gen_random_uuid(),
-  session_id  UUID        NOT NULL REFERENCES planning_sessions(id) ON DELETE CASCADE,
+  session_id  UUID        REFERENCES planning_sessions(id) ON DELETE CASCADE,
   log_date    DATE        NOT NULL DEFAULT CURRENT_DATE,
   note        TEXT        NOT NULL,
   logged_by   UUID        REFERENCES profiles(id) ON DELETE SET NULL,

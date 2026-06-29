@@ -89,6 +89,40 @@ export async function POST(request: Request) {
     );
   }
 
+  // Verify caller is planner or admin in this project
+  const { data: membership, error: memberError } = await supabase
+    .from("project_members")
+    .select("role")
+    .eq("project_id", projectId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (memberError || !membership) {
+    return NextResponse.json(
+      {
+        totalReceived: 0,
+        totalValidRows: 0,
+        totalInserted: 0,
+        failedCount: 0,
+        error: "You are not a member of this project.",
+      } satisfies ImportActivitiesResponse,
+      { status: 403 },
+    );
+  }
+
+  if (!["admin", "planner"].includes(membership.role)) {
+    return NextResponse.json(
+      {
+        totalReceived: 0,
+        totalValidRows: 0,
+        totalInserted: 0,
+        failedCount: 0,
+        error: "Only Planners and Admins can import activities.",
+      } satisfies ImportActivitiesResponse,
+      { status: 403 },
+    );
+  }
+
   const totalReceived = body.rows.length;
   const validRows = body.rows.filter(isValidActivityRow);
   const mappedActivities = mapRowsToActivities(validRows, mode);

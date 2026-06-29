@@ -1,210 +1,288 @@
 # Look Ahead Planner
 
-A construction look-ahead planning tool for site engineers,
-built as part of an assignment on lean construction planning.
+A multi-user, role-based construction look-ahead planning tool built on Lean construction principles. Designed for site teams to plan, track, and improve weekly work reliability using PPC (Percent Plan Complete).
+
+Live: https://mini-lookahead.vercel.app
+GitHub: https://github.com/Situ-Saw/mini_lookahead
+
+---
 
 ## What it does
 
-- Import activities from Primavera P6 Excel export
-- View and filter all project activities
-- Filter upcoming activities by look-ahead window (1–99 days)
-- Track constraints against activities
-- Calculate project delays from actual vs planned dates
-- Show PPC and projected end date on the dashboard
-- Manage 14-day planning sessions with daily logs
-- Track PPC reliability per session with history chart
+- Import activities from Primavera P6 Excel export (baseline + progress updates)
+- Multi-project support with per-project role assignments
+- Role-based access control enforced at the database level (not just hidden buttons)
+- Activity assignment from Planner to Site Engineers
+- Site Engineers see and update only their assigned activities
+- Constraint register with make-ready tracking (Ready / Not Ready per activity)
+- 14-day planning sessions with PPC tracking and variance reason capture
+- PPC trend chart across closed sessions
+- Daily logs per Site Engineer per session
+- Activity history and audit trail (who changed what, when)
+- Input validation on import (duplicate IDs, date conflicts)
+- Viewer role with read-only access scoped to their linked Site Engineer
+
+---
 
 ## Tech stack
 
-- Next.js 16 (App Router)
-- TypeScript
-- Supabase (PostgreSQL)
+- Next.js 14 (App Router)
+- TypeScript (strict mode)
+- Supabase (PostgreSQL + Auth + Row Level Security)
 - Tailwind CSS
 - SheetJS (Excel parsing)
 - Lucide React (icons)
 - Recharts (PPC history chart)
 
+---
+
+## Role hierarchy
+
+```
+Admin
+  └── Full access to everything across all projects
+
+Planner (Site Manager)
+  └── Imports schedules and sets the baseline
+  └── Assigns activities to Site Engineers
+  └── Manages planning sessions and constraints
+  └── Creates users via Admin panel
+
+Site Engineer
+  └── Sees only activities assigned to them
+  └── Updates progress on their own activities (0–99% freely, 100% only after constraints cleared)
+  └── Adds daily logs
+  └── Cannot import or change the baseline
+
+Viewer (Worker)
+  └── Read-only access to their linked Site Engineer's activities
+  └── Cannot change anything
+```
+
+> Role is enforced per project via Row Level Security on every table.
+> A Site Engineer cannot edit another engineer's activity even by manipulating the request directly —
+> the database rejects it.
+
+---
+
 ## Setup
 
-1. Clone the repository
-2. Copy `.env.example` to `.env.local` and fill in your Supabase values
-3. Run `schema.sql` in your Supabase SQL Editor
+1. Clone the repository:
+   ```
+   git clone https://github.com/Situ-Saw/mini_lookahead.git
+   cd mini_lookahead
+   ```
+
+2. Copy `.env.example` to `.env.local` and fill in your Supabase values:
+   ```
+   cp .env.example .env.local
+   ```
+
+3. Run `schema.sql` in your Supabase SQL Editor to create all tables,
+   enable Row Level Security, and set up all policies.
+
 4. Install dependencies:
+   ```
    npm install
+   ```
+
 5. Start the development server:
+   ```
    npm run dev
-6. Open http://localhost:3000
+   ```
 
-## Database schema
+6. Open http://localhost:3000 and log in with your Admin credentials.
 
-See `schema.sql` in the project root.
-Run it once in Supabase SQL Editor to create all tables,
-enable Row Level Security, and set up policies.
+---
 
 ## Environment variables
 
-See `.env.example` for required variables:
-- NEXT_PUBLIC_SUPABASE_URL
-- NEXT_PUBLIC_SUPABASE_ANON_KEY
+See `.env.example` for all required variables:
+
+```
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+```
+
+> `SUPABASE_SERVICE_ROLE_KEY` is required for admin operations (user creation, activity history logging).
+> Never expose this on the client side.
+
+---
+
+## User ID format
+
+Users are identified by auto-generated IDs in the format:
+
+```
+BSL-ADM-0001   → Admin
+BSL-PLN-0001   → Planner
+BSL-ENG-0001   → Site Engineer
+BSL-VWR-0001   → Viewer
+```
+
+Login email is derived as `{USER_ID}@lookahead.app`.
+Passwords are auto-generated and shown once at user creation.
+
+---
 
 ## Importing data
 
 Two import modes are supported:
 
 **Baseline import**
-Done once, locks the original planned schedule.
+Done once per project. Locks the original planned schedule.
 Cannot be re-imported once set.
 
 **Progress update**
-Imports actual start and finish dates from Primavera.
+Imports actual start and finish dates from Primavera P6.
 Recalculates progress % and delay days automatically.
+Can be run multiple times as work progresses.
+
+### Validation on import
+- Duplicate activity IDs within the same project are **blocked**
+- Finish date before start date triggers a **warning** (import proceeds)
+- Progress values outside 0–100 trigger a **warning** (import proceeds)
+
+---
 
 ## Planning sessions
 
 A planning session covers a 14-day window.
-Activities whose finish_date falls within the window
+Activities whose `finish_date` falls within the window
 are automatically committed to the session.
 
-A session closes when all committed activities are completed.
-It can close before 14 days if activities finish early.
+**PPC formula (correct):**
+```
+PPC = (activities where was_completed = true) / (total committed activities) × 100
+```
 
-PPC per session:
-  PPC = (completed activities) / (committed activities) x 100
+PPC updates automatically when a Site Engineer marks their activity as 100% complete.
+Planners can also mark activities complete directly as a fallback.
 
-Daily logs can be added each day within a session to record
-reasons for delays such as public holidays or material issues.
+When closing a session with incomplete activities, variance reasons must be captured
+per incomplete activity (Material, Design/RFI, Labour, Equipment, Approval, Weather, Other).
+These are stored and shown in the PPC history breakdown.
 
-Only one active session is supported at a time.
-Multiple project support is planned for a future version.
+---
 
-## PPC history
+## Make-ready (Ready / Not Ready)
 
-Each closed session stores its PPC score.
-The planning page shows a chart of PPC scores over time
-so clients and admins can track planning reliability trends.
+Every activity in the Lookahead view shows a **Ready** or **Not Ready** badge.
 
-## Assumptions
+- **Not Ready** = activity has one or more open constraints
+- Clicking "Show reasons" reveals the blocking constraints with type, description, and due date
+- Site Engineers cannot mark an activity 100% complete while it has open constraints
+- Constraints must be closed first before full completion is allowed
 
-- Excel file must be a Primavera P6 export in standard column format
-- Baseline import can only be done once per project
-- Progress % is derived from actual vs planned duration
-- PPC is measured per 14-day planning session, not overall completion
-- Role-based access control is planned for a future version
-- Authentication is planned for a future version
+---
 
-## Known limitations
+## Constraint register
 
-- No authentication yet (planned for Assignment 2)
-- Mobile view requires further optimization
-- Multiple concurrent sessions not yet supported
+Constraints are linked to real activities (not free text).
+Each constraint has:
+- Type (Drawing, Material, Labour, Equipment, Approval, RFI, Client Decision)
+- Status (Open / Closed)
+- Target removal date
+- Raised By (auto-filled from logged-in user, locked)
+- Description and remarks
 
-## Project structure
+---
 
-app/
-  dashboard/     → Project dashboard with PPC and timeline
-  activities/    → Activity master with delay analysis
-  lookahead/     → Upcoming activities filter
-  import/        → Excel import (baseline and progress update)
-  constraints/   → Constraint register and tracking
-  planning/      → 14-day planning sessions and PPC history
-  api/           → Server-side API routes
-lib/
-  supabase.ts          → Supabase client
-  primavera-import.ts  → Excel parsing and activity mapping
-schema.sql       → Database schema and RLS policies
-.env.example     → Environment variable template
+## Audit trail
 
+Every progress or assignment change is recorded in `activity_history`:
+- Who made the change
+- What it changed from and to
+- When it happened
 
+Viewable per activity via the History button on the Activities page.
 
+---
 
-## Entity Relationship Diagram For Part 2
+## Database schema
 
-### Layer 1 — Users and Projects
+See `schema.sql` in the project root.
+
+### ER Diagram
+
+#### Layer 1 — Users and Projects
 
 ```
 PROFILES ||--o{ PROJECT_MEMBERS : "belongs to"
 PROJECTS ||--o{ PROJECT_MEMBERS : "has members"
-PROFILES ||--o{ PROJECTS : "creates"
 
 PROFILES {
-  uuid    id          PK
-  text    name
-  text    email
-  text    global_role
+  uuid      id            PK
+  text      name
+  text      email
+  text      global_role
+  boolean   is_active
   timestamp created_at
 }
 
 PROJECTS {
-  uuid    id          PK
-  text    name
-  uuid    created_by  FK → profiles.id
+  uuid      id            PK
+  text      name
+  text      code
+  uuid      created_by    FK → profiles.id
   timestamp created_at
 }
 
 PROJECT_MEMBERS {
-  uuid    id          PK
-  uuid    project_id  FK → projects.id
-  uuid    user_id     FK → profiles.id
-  text    role
+  uuid      id            PK
+  uuid      project_id    FK → projects.id
+  uuid      user_id       FK → profiles.id
+  text      role
   timestamp joined_at
+}
+
+VIEWER_ASSIGNMENTS {
+  uuid      id            PK
+  uuid      viewer_id     FK → profiles.id
+  uuid      engineer_id   FK → profiles.id
+  uuid      project_id    FK → projects.id
+  boolean   is_active
 }
 ```
 
-> One user can be a Planner on Project BSL and a Viewer on another project simultaneously.
-> Role is enforced per project, not globally.
-
----
-
-### Layer 2 — Core Data
+#### Layer 2 — Core Data
 
 ```
-PROJECTS       ||--o{ ACTIVITIES         : "contains"
-PROJECTS       ||--o{ CONSTRAINTS        : "contains"
-PROJECTS       ||--o{ WEEKLY_COMMITMENTS : "has"
-ACTIVITIES     ||--o{ CONSTRAINTS        : "has"
-ACTIVITIES     ||--o{ WEEKLY_COMMITMENTS : "committed in"
-ACTIVITIES     ||--o{ ACTIVITY_HISTORY   : "tracked by"
-
 ACTIVITIES {
-  uuid     id              PK
-  uuid     project_id      FK → projects.id
-  text     activity_id
-  text     activity_name
-  uuid     assigned_to     FK → profiles.id
-  text     status
-  integer  progress
-  date     start_date
-  date     finish_date
-  date     act_start_date
-  date     act_end_date
-  integer  delay_days
-  boolean  is_baseline
+  uuid      id              PK
+  uuid      project_id      FK → projects.id
+  text      activity_id
+  text      activity_name
+  uuid      assigned_to     FK → profiles.id
+  text      status
+  integer   progress
+  date      start_date
+  date      finish_date
+  date      act_start_date
+  date      act_end_date
+  integer   delay_days
+  boolean   is_baseline
 }
 
 CONSTRAINTS {
-  uuid    id              PK
-  uuid    project_id      FK → projects.id
-  text    activity_id     FK → activities.activity_id
-  uuid    assigned_to     FK → profiles.id
-  text    constraint_type
-  text    status
-  date    due_date
-  text    description
-}
-
-WEEKLY_COMMITMENTS {
-  uuid    id              PK
-  uuid    project_id      FK → projects.id
-  text    activity_id     FK → activities.activity_id
-  date    week_start
-  boolean committed
-  boolean done
-  text    variance_reason
+  uuid      id              PK
+  uuid      project_id      FK → projects.id
+  text      activity_id     FK → activities.activity_id
+  text      constraint_type
+  text      status
+  date      target_removal_date
+  text      raised_by
+  text      description
+  text      remarks
+  timestamp created_at
+  timestamp updated_at
 }
 
 ACTIVITY_HISTORY {
   uuid      id            PK
   text      activity_id   FK → activities.activity_id
+  uuid      project_id    FK → projects.id
   uuid      changed_by    FK → profiles.id
   integer   progress_from
   integer   progress_to
@@ -214,30 +292,112 @@ ACTIVITY_HISTORY {
 }
 ```
 
+#### Layer 3 — Planning Sessions
+
+```
+PLANNING_SESSIONS {
+  uuid      id            PK
+  uuid      project_id    FK → projects.id
+  date      start_date
+  date      end_date
+  text      status
+  numeric   ppc_score
+  timestamp created_at
+  timestamp closed_at
+}
+
+SESSION_ACTIVITIES {
+  uuid      id              PK
+  uuid      session_id      FK → planning_sessions.id
+  text      activity_id     FK → activities.activity_id
+  uuid      assigned_to     FK → profiles.id
+  boolean   was_completed
+  text      variance_reason
+  timestamp completed_at
+  timestamp created_at
+}
+
+SESSION_DAILY_LOGS {
+  uuid      id            PK
+  uuid      session_id    FK → planning_sessions.id (nullable)
+  uuid      project_id    FK → projects.id
+  uuid      logged_by     FK → profiles.id
+  date      log_date
+  text      note
+  timestamp created_at
+}
+```
+
 ---
 
-### Roles and permissions
+## Permissions summary
 
-| Role | Import | Edit any activity | Edit own activity | View only |
+| Feature | Admin | Planner | Site Engineer | Viewer |
 |---|---|---|---|---|
-| Admin | Yes | Yes | Yes | Yes |
-| Planner | Yes | Yes | Yes | Yes |
-| Site Engineer | No | No | Yes | Yes |
-| Viewer | No | No | No | Yes |
+| Import baseline/progress | ✅ | ✅ | ❌ | ❌ |
+| View all activities | ✅ | ✅ | ❌ | ❌ |
+| View own activities | ✅ | ✅ | ✅ | ✅ (read-only) |
+| Update progress | ✅ | ✅ | ✅ (own only) | ❌ |
+| Assign activities | ✅ | ✅ | ❌ | ❌ |
+| Manage constraints | ✅ | ✅ | ✅ (own) | ❌ |
+| View constraints | ✅ | ✅ | ✅ | ❌ |
+| Planning sessions | ✅ | ✅ | ❌ | ❌ |
+| View lookahead | ✅ | ✅ | ✅ (own) | ✅ (SE's) |
+| Daily log | ❌ | ❌ | ✅ | ❌ |
+| Admin panel | ✅ | ❌ | ❌ | ❌ |
 
-> Role-based access is enforced at the database level through Row Level Security policies,
-> not just hidden buttons in the UI.
+> All permissions are enforced by Row Level Security at the database level,
+> not just by hiding UI elements.
 
 ---
 
-### Key design decisions
+## Key design decisions
 
-- A Site Engineer can only edit activities where `assigned_to = their user id`.
-  The database rejects any other update, even if the request is made directly.
-- A user cannot see data from projects they are not a member of.
-  This is enforced by RLS policies on every table using `project_id`.
-- Every progress or status change is recorded in `activity_history` with
-  the user who made the change and the before/after values.
-- `weekly_commitments` stores whether each committed activity was completed
-  that week, and if not — the variance reason (Material, Labour, RFI, etc.).
-  This builds the PPC trend over time.
+- **Admin always paired with Planner** in every role check — Admin has full access everywhere.
+- **RLS is the source of truth** for data access. UI role checks complement it but do not replace it.
+- **SE cannot mark 100% complete with open constraints** — constraints must be resolved first.
+- **PPC is driven by SE progress updates**, not Planner actions. When SE sets progress to 100%, `was_completed` in `session_activities` updates automatically.
+- **Raised By on constraints is auto-filled and locked** to the logged-in user — cannot be faked.
+- **Viewer is linked to a specific SE** via `viewer_assignments`. They see only that SE's activities, enforced by RLS.
+- **Daily logs are always available** to Site Engineers regardless of active session status.
+
+---
+
+## Known limitations
+
+- Completed activities cannot be reassigned (by design — assignment is hidden for completed work)
+- Mobile view requires further optimization
+- Console.error logs are retained for debugging server-side failures; 
+  console.log debug statements have been removed
+- Multiple concurrent sessions not supported
+- Pagination is applied at 50 activities per page on the Activity Master view
+
+---
+
+## Project structure
+
+```
+app/
+  dashboard/        → Project dashboard with KPIs and timeline
+  activities/       → Activity Master (Planner) + My Activities (SE) + read-only (Viewer)
+  lookahead/        → Look Ahead with Ready/Not Ready badges
+  import/           → Excel import (baseline and progress update)
+  constraints/      → Constraint register
+  planning/         → 14-day planning sessions, PPC history, variance reasons
+  admin/            → Admin panel (user creation, project management)
+  select-project/   → Project picker post-login
+  api/
+    admin/          → create-user, create-project, deactivate-user, reset-password
+    activities/     → update-progress
+    import/         → baseline and progress update import
+
+lib/
+  supabase/         → Supabase client (browser, server, admin)
+  hooks/            → useActiveProject, useProjectRole
+  admin/            → credentials generation, admin auth
+  primavera-import.ts → Excel parsing, activity mapping, validation
+  role-access.ts    → ROLE_ACCESS map (single source of truth)
+
+schema.sql          → Full database schema with RLS policies
+.env.example        → Environment variable template
+```
