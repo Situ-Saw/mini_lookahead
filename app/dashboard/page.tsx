@@ -349,37 +349,6 @@ const VARIANT_STYLES: Record<
   },
 };
 
-function getHealthStatus(
-  ppc: number,
-  hasData: boolean,
-): { label: string; color: string } {
-  if (!hasData) {
-    return {
-      label: "No Data",
-      color:
-        "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
-    };
-  }
-  if (ppc >= 71) {
-    return {
-      label: "On Track",
-      color:
-        "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300",
-    };
-  }
-  if (ppc >= 41) {
-    return {
-      label: "At Risk",
-      color:
-        "bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300",
-    };
-  }
-  return {
-    label: "Delayed",
-    color: "bg-red-100 text-red-800 dark:bg-red-950/50 dark:text-red-300",
-  };
-}
-
 const STATUS_BADGE_COLORS: Record<string, string> = {
   red: "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400",
   emerald:
@@ -407,10 +376,8 @@ function KpiCard({
   icon: Icon,
   trendText,
   trendColor,
-  showLeftAccent = false,
   valueClassName,
   cardClassName,
-  accentBorderClass,
 }: {
   label: string;
   value?: number;
@@ -420,19 +387,16 @@ function KpiCard({
   icon: LucideIcon;
   trendText?: string;
   trendColor?: string;
-  showLeftAccent?: boolean;
   valueClassName?: string;
   cardClassName?: string;
-  accentBorderClass?: string;
 }) {
   const styles = VARIANT_STYLES[variant];
   const rendered = displayValue ?? value?.toLocaleString() ?? "—";
   const cardBg = cardClassName ?? styles.card;
-  const leftBorder = `border-l-4 ${accentBorderClass ?? styles.border}`;
 
   return (
     <div
-      className={`relative overflow-hidden rounded-xl border border-zinc-200 p-5 shadow-sm transition-shadow hover:shadow-md dark:border-zinc-800 ${cardBg} ${leftBorder}`}
+      className={`relative overflow-hidden rounded-xl border border-zinc-100 p-5 shadow-md transition-shadow hover:shadow-lg dark:border-zinc-800 ${cardBg}`}
     >
       <Icon
         className={`absolute right-4 top-4 h-5 w-5 ${styles.icon}`}
@@ -553,12 +517,6 @@ function SectionHeader({
       )}
       <div className="mt-3 h-px w-full bg-zinc-200 dark:bg-zinc-800" />
     </div>
-  );
-}
-
-function MetadataChipSkeleton() {
-  return (
-    <span className="inline-block h-6 w-28 animate-pulse rounded-full bg-zinc-200 dark:bg-zinc-700" />
   );
 }
 
@@ -758,11 +716,6 @@ export default function DashboardPage() {
   const projectedDurationLonger =
     (stats?.projectedDurationDays ?? 0) > (stats?.plannedDurationDays ?? 0);
 
-  const healthStatus = useMemo(
-    () => getHealthStatus(ppc, !isLoading && stats !== null),
-    [ppc, isLoading, stats],
-  );
-
   const isDelayCritical = useMemo(() => {
     const total = stats?.totalActivities ?? 0;
     const delayed = stats?.delayedActivities ?? 0;
@@ -880,41 +833,40 @@ export default function DashboardPage() {
           </div>
         )}
 
-        <div className="rounded-xl border border-zinc-200 bg-gradient-to-br from-zinc-50 to-white px-6 py-6 shadow-sm dark:border-zinc-800 dark:from-zinc-900/60 dark:to-zinc-950 sm:px-8">
+        <div className="rounded-2xl bg-zinc-900 px-8 py-8 shadow-xl dark:bg-zinc-800">
           <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
-            <div className="min-w-0 flex-1">
-              <p className="text-xs font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-widest text-zinc-400">
                 Construction Planning System
               </p>
-              <h1 className="mt-2 text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100 sm:text-3xl">
+              <h1 className="mt-2 text-3xl font-bold tracking-tight text-white sm:text-4xl">
                 {activeProject.name}
               </h1>
-              <div className="mt-3">
-                <span className="inline-flex items-center rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <span className="rounded-full bg-zinc-700 px-3 py-1 text-xs font-medium text-zinc-300">
                   {activeProject.code}
                 </span>
               </div>
-              <div className="mt-4 flex flex-wrap gap-2">
+              <div className="mt-3 flex flex-wrap items-center gap-2">
                 {isLoading || !stats ? (
                   <>
-                    <MetadataChipSkeleton />
-                    <MetadataChipSkeleton />
-                    <MetadataChipSkeleton />
-                    <MetadataChipSkeleton />
+                    <span className="h-6 w-28 animate-pulse rounded-full bg-zinc-700" />
+                    <span className="h-6 w-24 animate-pulse rounded-full bg-zinc-700" />
+                    <span className="h-6 w-32 animate-pulse rounded-full bg-zinc-700" />
                   </>
                 ) : (
                   <>
-                    <span className="inline-flex items-center rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-zinc-700 bg-zinc-800 px-3 py-1 text-xs font-medium text-zinc-300">
                       📅 Baseline: {formatDisplayDate(stats.plannedStartDate)}
                     </span>
-                    <span className="inline-flex items-center rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-zinc-700 bg-zinc-800 px-3 py-1 text-xs font-medium text-zinc-300">
                       📊 {stats.totalActivities} Activities
                     </span>
-                    <span className="inline-flex items-center rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-zinc-700 bg-zinc-800 px-3 py-1 text-xs font-medium text-zinc-300">
                       ⚠ {stats.openConstraints} Open Constraints
                     </span>
-                    <span className="inline-flex items-center rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
-                      🕐 Updated:{" "}
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-zinc-700 bg-zinc-800 px-3 py-1 text-xs font-medium text-zinc-300">
+                      🕐{" "}
                       {lastUpdated ? formatLastUpdated(lastUpdated) : "—"}
                     </span>
                   </>
@@ -922,25 +874,53 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            <div className="flex flex-col items-start gap-2 sm:items-end">
-              <span
-                className={`rounded-full px-4 py-2 text-sm font-bold tracking-wide ${healthStatus.color}`}
-              >
-                ● {healthStatus.label}
-              </span>
+            <div className="flex shrink-0 flex-col items-end gap-3">
+              {(() => {
+                const health = !stats
+                  ? {
+                      label: "No Data",
+                      cls: "bg-zinc-700 text-zinc-400 border-zinc-600",
+                    }
+                  : ppc >= 71
+                    ? {
+                        label: "On Track",
+                        cls: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30",
+                      }
+                    : ppc >= 41
+                      ? {
+                          label: "At Risk",
+                          cls: "bg-amber-500/20 text-amber-300 border-amber-500/30",
+                        }
+                      : {
+                          label: "Delayed",
+                          cls: "bg-red-500/20 text-red-300 border-red-500/30",
+                        };
+                return (
+                  <span
+                    className={`rounded-full border px-4 py-1.5 text-sm font-bold ${health.cls}`}
+                  >
+                    ● {health.label}
+                  </span>
+                );
+              })()}
               <button
                 type="button"
                 onClick={handleRefresh}
                 disabled={isLoading}
                 aria-label="Refresh dashboard data"
-                className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
+                className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-2 text-sm font-medium text-zinc-300 transition-colors hover:bg-zinc-700 disabled:opacity-50"
               >
                 <RefreshCw
                   className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`}
                   aria-hidden="true"
                 />
-                Refresh
+                {isLoading ? "Refreshing..." : "Refresh"}
               </button>
+              <p className="text-xs text-zinc-500">
+                {lastUpdated
+                  ? `Updated ${formatLastUpdated(lastUpdated)}`
+                  : "Loading..."}
+              </p>
             </div>
           </div>
         </div>
@@ -1008,8 +988,6 @@ export default function DashboardPage() {
               isLoading={isLoading}
               variant={isDelayCritical ? "red" : "neutral"}
               icon={AlertTriangle}
-              showLeftAccent
-              accentBorderClass="border-l-red-500 dark:border-l-red-400"
               cardClassName={
                 isDelayCritical
                   ? undefined
