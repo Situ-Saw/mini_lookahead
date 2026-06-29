@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { BarChart3, Check, Loader2, RefreshCw, Shield } from "lucide-react";
+import { BarChart3, Check, ChevronDown, Loader2, RefreshCw, Shield } from "lucide-react";
 import * as XLSX from "xlsx";
 import type { ImportActivitiesResponse, ImportMode } from "@/lib/primavera-import";
 import {
@@ -146,6 +146,7 @@ export default function ImportPage() {
   );
   const [dbImportResult, setDbImportResult] =
     useState<ImportActivitiesResponse | null>(null);
+  const [showImportWarnings, setShowImportWarnings] = useState(false);
 
   useEffect(() => {
     document.title = "Import Activities";
@@ -170,6 +171,7 @@ export default function ImportPage() {
     setError(null);
     setBaselineExistsError(false);
     setDbImportResult(null);
+    setShowImportWarnings(false);
   }, []);
 
   const selectFile = useCallback(
@@ -547,6 +549,48 @@ export default function ImportPage() {
             )}
           </p>
         )}
+
+        {dbImportSucceeded &&
+          dbImportResult?.warnings &&
+          dbImportResult.warnings.length > 0 && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-900/50 dark:bg-amber-950/30">
+              <button
+                type="button"
+                onClick={() => setShowImportWarnings((current) => !current)}
+                className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-medium text-amber-900 dark:text-amber-200"
+              >
+                <span>
+                  ⚠ {dbImportResult.warnings.length} validation warning
+                  {dbImportResult.warnings.length === 1 ? "" : "s"}
+                </span>
+                <ChevronDown
+                  className={`h-4 w-4 shrink-0 transition-transform duration-200 ${
+                    showImportWarnings ? "rotate-180" : ""
+                  }`}
+                  aria-hidden="true"
+                />
+              </button>
+
+              {showImportWarnings && (
+                <ul className="space-y-2 border-t border-amber-200 px-4 py-3 dark:border-amber-900/50">
+                  {dbImportResult.warnings.map((warning) => (
+                    <li
+                      key={`${warning.activity_id}-${warning.warning}`}
+                      className="text-sm text-amber-900 dark:text-amber-200"
+                    >
+                      <span className="font-mono text-xs">
+                        {warning.activity_id}
+                      </span>
+                      <span className="mx-2 text-amber-700 dark:text-amber-300">
+                        —
+                      </span>
+                      {warning.warning}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
 
         {dbImportPartial && dbImportResult && (
           <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">

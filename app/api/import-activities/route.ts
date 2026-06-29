@@ -8,6 +8,7 @@ import {
   isValidActivityRow,
   mapRowsToActivities,
   toUpsertPayload,
+  validateActivities,
 } from "@/lib/primavera-import";
 
 export type { ImportActivitiesResponse } from "@/lib/primavera-import";
@@ -93,6 +94,32 @@ export async function POST(request: Request) {
   const mappedActivities = mapRowsToActivities(validRows, mode);
   const totalValidRows = mappedActivities.length;
 
+  const activityIdCounts = new Map<string, number>();
+  for (const activity of mappedActivities) {
+    activityIdCounts.set(
+      activity.activity_id,
+      (activityIdCounts.get(activity.activity_id) ?? 0) + 1,
+    );
+  }
+  const duplicateIds = [...activityIdCounts.entries()]
+    .filter(([, count]) => count > 1)
+    .map(([id]) => id);
+
+  if (duplicateIds.length > 0) {
+    return NextResponse.json(
+      {
+        totalReceived,
+        totalValidRows,
+        totalInserted: 0,
+        failedCount: totalValidRows,
+        error: `Duplicate activity IDs found in import file: ${duplicateIds.join(", ")}. Each activity ID must be unique within a project.`,
+      } satisfies ImportActivitiesResponse,
+      { status: 400 },
+    );
+  }
+
+  const warnings = validateActivities(mappedActivities);
+
   if (mode === "baseline") {
     const { count, error: baselineCountError } = await supabaseAdmin
       .from("activities")
@@ -167,6 +194,7 @@ export async function POST(request: Request) {
     totalValidRows,
     totalInserted: totalValidRows,
     failedCount: 0,
+    warnings: warnings.length > 0 ? warnings : undefined,
   };
 
   return NextResponse.json(response);

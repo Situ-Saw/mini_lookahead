@@ -39,6 +39,12 @@ export type ImportActivitiesResponse = {
   totalInserted: number;
   failedCount: number;
   error?: string;
+  warnings?: ValidationWarning[];
+};
+
+export type ValidationWarning = {
+  activity_id: string;
+  warning: string;
 };
 
 const DESCRIPTIVE_HEADER_MARKERS = {
@@ -125,6 +131,21 @@ export function formatToDateString(value: unknown): string | null {
   }
 
   return null;
+}
+
+export function isFinishBeforeStart(
+  startDate: string | null,
+  finishDate: string | null,
+): boolean {
+  if (!startDate || !finishDate) return false;
+
+  const start = new Date(startDate);
+  const finish = new Date(finishDate);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(finish.getTime())) {
+    return false;
+  }
+
+  return finish < start;
 }
 
 /** @deprecated Use formatToDateString instead */
@@ -355,6 +376,30 @@ export function mapRowsToActivities(
   return rows
     .filter(isValidActivityRow)
     .map((row) => mapExcelRowToActivity(row, mode));
+}
+
+export function validateActivities(
+  activities: ActivityInsert[],
+): ValidationWarning[] {
+  const warnings: ValidationWarning[] = [];
+
+  for (const activity of activities) {
+    if (isFinishBeforeStart(activity.start_date, activity.finish_date)) {
+      warnings.push({
+        activity_id: activity.activity_id,
+        warning: `Finish date (${activity.finish_date}) is before start date (${activity.start_date})`,
+      });
+    }
+
+    if (activity.progress < 0 || activity.progress > 100) {
+      warnings.push({
+        activity_id: activity.activity_id,
+        warning: `Progress ${activity.progress}% is outside valid range (0-100)`,
+      });
+    }
+  }
+
+  return warnings;
 }
 
 export function toUpsertPayload(

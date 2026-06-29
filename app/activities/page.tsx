@@ -1258,6 +1258,7 @@ function ActivitiesTable({
 }
 
 function PlannerAdminActivitiesView() {
+  const PAGE_SIZE = 50;
   const { activeProject, isLoading: isProjectLoading } = useActiveProject();
   const [activities, setActivities] = useState<Activity[]>([]);
   const [engineers, setEngineers] = useState<Engineer[]>([]);
@@ -1267,6 +1268,7 @@ function PlannerAdminActivitiesView() {
   const [activeFilter, setActiveFilter] = useState<ActivityFilter>("all");
   const [sortField, setSortField] = useState<SortField>("start_date");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+  const [currentPage, setCurrentPage] = useState(1);
   const [assignModal, setAssignModal] = useState<Activity | null>(null);
   const [selectedEngineer, setSelectedEngineer] = useState<string>("");
   const [isAssigning, setIsAssigning] = useState(false);
@@ -1575,6 +1577,18 @@ function PlannerAdminActivitiesView() {
     return sorted;
   }, [filteredActivities, sortDirection, sortField]);
 
+  const totalPages = Math.ceil(sortedActivities.length / PAGE_SIZE);
+
+  const paginatedActivities = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE;
+    const end = start + PAGE_SIZE;
+    return sortedActivities.slice(start, end);
+  }, [sortedActivities, currentPage]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeFilter, searchQuery, sortField, sortDirection]);
+
   const handleSort = useCallback((field: SortField) => {
     setSortField((currentField) => {
       if (currentField === field) {
@@ -1716,13 +1730,51 @@ function PlannerAdminActivitiesView() {
           No activities match your search or filter.
         </p>
       ) : (
-        <ActivitiesTable
-          activities={sortedActivities}
-          engineers={engineers}
-          canManageAssignments={canManageAssignments}
-          onOpenAssignModal={openAssignModal}
-          onOpenHistory={(activityId) => void handleOpenHistory(activityId)}
-        />
+        <>
+          <ActivitiesTable
+            activities={paginatedActivities}
+            engineers={engineers}
+            canManageAssignments={canManageAssignments}
+            onOpenAssignModal={openAssignModal}
+            onOpenHistory={(activityId) => void handleOpenHistory(activityId)}
+          />
+
+          {totalPages > 1 && (
+            <div className="mt-4 flex items-center justify-between">
+              <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                Showing {(currentPage - 1) * PAGE_SIZE + 1}–
+                {Math.min(currentPage * PAGE_SIZE, sortedActivities.length)} of{" "}
+                {sortedActivities.length} activities
+              </p>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                  disabled={currentPage === 1}
+                  className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
+                >
+                  Previous
+                </button>
+
+                <span className="text-sm text-zinc-600 dark:text-zinc-400">
+                  Page {currentPage} of {totalPages}
+                </span>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setCurrentPage((page) => Math.min(totalPages, page + 1))
+                  }
+                  disabled={currentPage === totalPages}
+                  className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       {historyActivityId && (
