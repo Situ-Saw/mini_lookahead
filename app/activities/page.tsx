@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Loader2 } from "lucide-react";
+import { Loader2, X } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import { createClient } from "@/lib/supabase/client";
@@ -50,6 +50,16 @@ type AssignedViewer = {
   is_active: boolean;
   name: string;
   email: string;
+};
+
+type HistoryEntry = {
+  id: string;
+  changed_by_name: string;
+  progress_from: number | null;
+  progress_to: number | null;
+  status_from: string | null;
+  status_to: string | null;
+  changed_at: string;
 };
 
 function normalizeMyActivity(row: Record<string, unknown>): MyActivityRow | null {
@@ -107,19 +117,23 @@ function SeStatusBadge({ status }: { status: string | null }) {
 function MyActivitiesTable({
   activities,
   showUpdateColumn,
+  showHistoryButton,
   progressMap,
   savingMap,
   feedbackMap,
   onProgressChange,
   onSave,
+  onOpenHistory,
 }: {
   activities: MyActivityRow[];
   showUpdateColumn: boolean;
+  showHistoryButton: boolean;
   progressMap: Record<string, number>;
   savingMap: Record<string, boolean>;
   feedbackMap: Record<string, "saved" | "error" | null>;
   onProgressChange: (activityId: string, progress: number) => void;
   onSave: (activity: MyActivityRow) => void;
+  onOpenHistory: (activityId: string) => void;
 }) {
   return (
     <div className="overflow-x-auto rounded-lg border border-zinc-200 shadow-sm dark:border-zinc-800">
@@ -150,6 +164,11 @@ function MyActivitiesTable({
             {showUpdateColumn && (
               <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
                 Update
+              </th>
+            )}
+            {!showUpdateColumn && showHistoryButton && (
+              <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+                Actions
               </th>
             )}
           </tr>
@@ -214,6 +233,15 @@ function MyActivitiesTable({
                         >
                           {isSaving ? "Saving..." : "Save"}
                         </button>
+                        {showHistoryButton && (
+                          <button
+                            type="button"
+                            onClick={() => onOpenHistory(activity.activity_id)}
+                            className="rounded border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
+                          >
+                            History
+                          </button>
+                        )}
                       </div>
                       {feedback === "saved" && (
                         <p className="text-xs text-emerald-600 dark:text-emerald-400">
@@ -226,6 +254,17 @@ function MyActivitiesTable({
                         </p>
                       )}
                     </div>
+                  </td>
+                )}
+                {!showUpdateColumn && showHistoryButton && (
+                  <td className="whitespace-nowrap px-4 py-3">
+                    <button
+                      type="button"
+                      onClick={() => onOpenHistory(activity.activity_id)}
+                      className="rounded border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
+                    >
+                      History
+                    </button>
                   </td>
                 )}
               </tr>
@@ -272,6 +311,181 @@ function formatDate(value: string | null): string {
     month: "short",
     day: "numeric",
   }).format(date);
+}
+
+function formatHistoryDateTime(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+
+  return new Intl.DateTimeFormat("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function normalizeHistoryEntry(
+  row: Record<string, unknown>,
+): HistoryEntry | null {
+  if (typeof row.id !== "string") {
+    return null;
+  }
+
+  const profile = row.profiles as { name?: string } | null;
+  const parseOptionalInt = (value: unknown): number | null => {
+    if (value === null || value === undefined) {
+      return null;
+    }
+
+    const numeric = typeof value === "number" ? value : Number(value);
+    return Number.isNaN(numeric) ? null : numeric;
+  };
+
+  return {
+    id: row.id,
+    changed_by_name: profile?.name?.trim() ? profile.name : "System",
+    progress_from: parseOptionalInt(row.progress_from),
+    progress_to: parseOptionalInt(row.progress_to),
+    status_from:
+      typeof row.status_from === "string" ? row.status_from : null,
+    status_to: typeof row.status_to === "string" ? row.status_to : null,
+    changed_at: String(row.changed_at ?? ""),
+  };
+}
+
+async function fetchActivityHistory(
+  activityId: string,
+  projectId: string,
+): Promise<{ entries: HistoryEntry[]; error: string | null }> {
+  const { data, error } = await supabase
+    .from("activity_history")
+    .select(
+      "id, progress_from, progress_to, status_from, status_to, changed_at, profiles(name)",
+    )
+    .eq("activity_id", activityId)
+    .eq("project_id", projectId)
+    .order("changed_at", { ascending: false })
+    .limit(20);
+
+  if (error) {
+    return { entries: [], error: error.message };
+  }
+
+  const entries = (data ?? [])
+    .map((row) => normalizeHistoryEntry(row as Record<string, unknown>))
+    .filter((row): row is HistoryEntry => row !== null);
+
+  return { entries, error: null };
+}
+
+function ActivityHistoryPanel({
+  activityId,
+  entries,
+  isLoading,
+  error,
+  onClose,
+}: {
+  activityId: string;
+  entries: HistoryEntry[];
+  isLoading: boolean;
+  error: string | null;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end">
+      <button
+        type="button"
+        aria-label="Close history panel"
+        className="absolute inset-0 bg-black/50"
+        onClick={onClose}
+      />
+
+      <aside
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="activity-history-title"
+        className="relative z-10 flex h-full w-full max-w-md flex-col border-l border-zinc-200 bg-white shadow-xl dark:border-zinc-800 dark:bg-zinc-950"
+      >
+        <div className="flex items-start justify-between border-b border-zinc-200 px-5 py-4 dark:border-zinc-800">
+          <h2
+            id="activity-history-title"
+            className="pr-4 text-lg font-semibold text-zinc-900 dark:text-zinc-100"
+          >
+            Activity History — {activityId}
+          </h2>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="rounded-md p-1 text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+          >
+            <X className="h-5 w-5" aria-hidden="true" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-5 py-4">
+          {isLoading ? (
+            <div className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+              Loading history...
+            </div>
+          ) : error ? (
+            <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
+              {error}
+            </p>
+          ) : entries.length === 0 ? (
+            <p className="text-sm text-zinc-600 dark:text-zinc-400">
+              No history recorded for this activity yet.
+            </p>
+          ) : (
+            <div className="relative space-y-0 pl-6 before:absolute before:bottom-2 before:left-[7px] before:top-2 before:w-px before:bg-zinc-200 dark:before:bg-zinc-700">
+              {entries.map((entry) => (
+                <div key={entry.id} className="relative pb-6 last:pb-0">
+                  <span
+                    aria-hidden="true"
+                    className="absolute -left-[17px] top-1.5 h-3 w-3 rounded-full border-2 border-zinc-300 bg-white dark:border-zinc-600 dark:bg-zinc-950"
+                  />
+                  <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                    Changed by: {entry.changed_by_name}
+                  </p>
+                  <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                    {formatHistoryDateTime(entry.changed_at)}
+                  </p>
+                  <div className="mt-2 space-y-1 text-sm text-zinc-700 dark:text-zinc-300">
+                    {entry.progress_from !== null &&
+                      entry.progress_to !== null && (
+                        <p>
+                          Progress: {entry.progress_from}% → {entry.progress_to}
+                          %
+                        </p>
+                      )}
+                    {entry.status_from && entry.status_to && (
+                      <p>
+                        Status: {entry.status_from} → {entry.status_to}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </aside>
+    </div>
+  );
 }
 
 function formatCell(value: string | number | null): string {
@@ -699,11 +913,13 @@ function ActivitiesTable({
   engineers,
   canManageAssignments,
   onOpenAssignModal,
+  onOpenHistory,
 }: {
   activities: Activity[];
   engineers: Engineer[];
   canManageAssignments: boolean;
   onOpenAssignModal: (activity: Activity) => void;
+  onOpenHistory: (activityId: string) => void;
 }) {
   const innerRef = useRef<HTMLDivElement>(null);
   const outerRef = useRef<HTMLDivElement>(null);
@@ -887,23 +1103,32 @@ function ActivitiesTable({
                 </td>
                 {canManageAssignments && (
                   <td className="whitespace-nowrap px-4 py-3">
-                    {activity.assigned_to ? (
+                    <div className="flex flex-wrap items-center gap-2">
+                      {activity.assigned_to ? (
+                        <button
+                          type="button"
+                          onClick={() => onOpenAssignModal(activity)}
+                          className="rounded bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 transition-colors hover:bg-amber-100 dark:bg-amber-950/30 dark:text-amber-400 dark:hover:bg-amber-950/50"
+                        >
+                          Reassign
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => onOpenAssignModal(activity)}
+                          className="rounded bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:bg-blue-950/30 dark:text-blue-300 dark:hover:bg-blue-950/50"
+                        >
+                          Assign
+                        </button>
+                      )}
                       <button
                         type="button"
-                        onClick={() => onOpenAssignModal(activity)}
-                        className="rounded bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 transition-colors hover:bg-amber-100 dark:bg-amber-950/30 dark:text-amber-400 dark:hover:bg-amber-950/50"
+                        onClick={() => onOpenHistory(activity.activity_id)}
+                        className="rounded border border-zinc-300 bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
                       >
-                        Reassign
+                        History
                       </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => onOpenAssignModal(activity)}
-                        className="rounded bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:bg-blue-950/30 dark:text-blue-300 dark:hover:bg-blue-950/50"
-                      >
-                        Assign
-                      </button>
-                    )}
+                    </div>
                   </td>
                 )}
               </tr>
@@ -942,9 +1167,45 @@ function PlannerAdminActivitiesView() {
     null,
   );
   const [isLoadingWarnings, setIsLoadingWarnings] = useState(false);
+  const [historyActivityId, setHistoryActivityId] = useState<string | null>(
+    null,
+  );
+  const [historyEntries, setHistoryEntries] = useState<HistoryEntry[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
 
   const canManageAssignments =
     activeProject?.role === "admin" || activeProject?.role === "planner";
+
+  const handleOpenHistory = useCallback(
+    async (activityId: string) => {
+      if (!activeProject) {
+        return;
+      }
+
+      setHistoryActivityId(activityId);
+      setIsLoadingHistory(true);
+      setHistoryError(null);
+      setHistoryEntries([]);
+
+      const { entries, error } = await fetchActivityHistory(
+        activityId,
+        activeProject.id,
+      );
+
+      setHistoryEntries(entries);
+      setHistoryError(error);
+      setIsLoadingHistory(false);
+    },
+    [activeProject],
+  );
+
+  const handleCloseHistory = useCallback(() => {
+    setHistoryActivityId(null);
+    setHistoryEntries([]);
+    setHistoryError(null);
+    setIsLoadingHistory(false);
+  }, []);
 
   useEffect(() => {
     document.title = "Activity Master";
@@ -1351,6 +1612,17 @@ function PlannerAdminActivitiesView() {
           engineers={engineers}
           canManageAssignments={canManageAssignments}
           onOpenAssignModal={openAssignModal}
+          onOpenHistory={(activityId) => void handleOpenHistory(activityId)}
+        />
+      )}
+
+      {historyActivityId && (
+        <ActivityHistoryPanel
+          activityId={historyActivityId}
+          entries={historyEntries}
+          isLoading={isLoadingHistory}
+          error={historyError}
+          onClose={handleCloseHistory}
         />
       )}
 
@@ -1803,6 +2075,12 @@ export default function ActivitiesPage() {
   const [projectId, setProjectId] = useState<string | null>(null);
   const [initError, setInitError] = useState<string | null>(null);
   const [viewerEngineerMissing, setViewerEngineerMissing] = useState(false);
+  const [historyActivityId, setHistoryActivityId] = useState<string | null>(
+    null,
+  );
+  const [historyEntries, setHistoryEntries] = useState<HistoryEntry[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
   const feedbackTimeoutsRef = useRef<
     Record<string, ReturnType<typeof setTimeout>>
   >({});
@@ -2030,6 +2308,36 @@ export default function ActivitiesPage() {
     [projectId, progressMap, setFeedbackWithTimeout],
   );
 
+  const handleOpenHistory = useCallback(
+    async (activityId: string) => {
+      if (!projectId) {
+        return;
+      }
+
+      setHistoryActivityId(activityId);
+      setIsLoadingHistory(true);
+      setHistoryError(null);
+      setHistoryEntries([]);
+
+      const { entries, error } = await fetchActivityHistory(
+        activityId,
+        projectId,
+      );
+
+      setHistoryEntries(entries);
+      setHistoryError(error);
+      setIsLoadingHistory(false);
+    },
+    [projectId],
+  );
+
+  const handleCloseHistory = useCallback(() => {
+    setHistoryActivityId(null);
+    setHistoryEntries([]);
+    setHistoryError(null);
+    setIsLoadingHistory(false);
+  }, []);
+
   if (loading) {
     return (
       <main className="flex min-h-[50vh] items-center justify-center px-6 py-8">
@@ -2055,6 +2363,8 @@ export default function ActivitiesPage() {
   const isSiteEngineer = role === "site_engineer";
   const isViewer = role === "viewer";
   const showUpdateColumn = isSiteEngineer && !roleLoading;
+  const showHistoryButton =
+    role === "admin" || role === "planner" || role === "site_engineer";
 
   if (isViewer && viewerEngineerMissing) {
     return (
@@ -2095,11 +2405,23 @@ export default function ActivitiesPage() {
         <MyActivitiesTable
           activities={activities}
           showUpdateColumn={showUpdateColumn}
+          showHistoryButton={showHistoryButton}
           progressMap={progressMap}
           savingMap={savingMap}
           feedbackMap={feedbackMap}
           onProgressChange={handleProgressChange}
           onSave={(activity) => void handleSave(activity)}
+          onOpenHistory={(activityId) => void handleOpenHistory(activityId)}
+        />
+      )}
+
+      {historyActivityId && (
+        <ActivityHistoryPanel
+          activityId={historyActivityId}
+          entries={historyEntries}
+          isLoading={isLoadingHistory}
+          error={historyError}
+          onClose={handleCloseHistory}
         />
       )}
 

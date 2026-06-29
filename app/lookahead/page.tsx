@@ -17,6 +17,7 @@ type PlanningSession = {
 type SessionCommittedActivity = {
   activity_id: string;
   was_completed: boolean;
+  completed_at: string | null;
   activity_name: string;
   status: string | null;
   finish_date: string | null;
@@ -158,6 +159,7 @@ function normalizeSessionActivity(
   return {
     activity_id: String(row.activity_id),
     was_completed: Boolean(row.was_completed),
+    completed_at: (row.completed_at as string | null) ?? null,
     activity_name: String(activity.activity_name ?? ""),
     status: (activity.status as string | null) ?? null,
     finish_date: (activity.finish_date as string | null) ?? null,
@@ -425,6 +427,7 @@ export default function LookaheadPage() {
     Record<string, ActivityConstraint[]>
   >({});
   const [showBlockedOnly, setShowBlockedOnly] = useState(false);
+  const [showCompletedSection, setShowCompletedSection] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -552,6 +555,7 @@ export default function LookaheadPage() {
         `
         activity_id,
         was_completed,
+        completed_at,
         activities (
           activity_name,
           status,
@@ -688,6 +692,48 @@ export default function LookaheadPage() {
         : activities,
     [activities, constraintsMap, showBlockedOnly],
   );
+
+  const notCompletedActivities = useMemo(() => {
+    const filtered = visibleActivities.filter(
+      (activity) => !activity.was_completed,
+    );
+
+    return [...filtered].sort((left, right) => {
+      const leftDate = parseDateOnly(left.finish_date);
+      const rightDate = parseDateOnly(right.finish_date);
+
+      if (!leftDate && !rightDate) {
+        return left.activity_id.localeCompare(right.activity_id);
+      }
+      if (!leftDate) return 1;
+      if (!rightDate) return -1;
+
+      return leftDate.getTime() - rightDate.getTime();
+    });
+  }, [visibleActivities]);
+
+  const completedActivities = useMemo(() => {
+    const filtered = visibleActivities.filter(
+      (activity) => activity.was_completed,
+    );
+
+    return [...filtered].sort((left, right) => {
+      const leftTime = left.completed_at
+        ? new Date(left.completed_at).getTime()
+        : Number.NaN;
+      const rightTime = right.completed_at
+        ? new Date(right.completed_at).getTime()
+        : Number.NaN;
+
+      if (Number.isNaN(leftTime) && Number.isNaN(rightTime)) {
+        return left.activity_id.localeCompare(right.activity_id);
+      }
+      if (Number.isNaN(leftTime)) return 1;
+      if (Number.isNaN(rightTime)) return -1;
+
+      return rightTime - leftTime;
+    });
+  }, [visibleActivities]);
 
   if (isProjectLoading) {
     return (
@@ -847,17 +893,78 @@ export default function LookaheadPage() {
               No blocked activities in this session.
             </p>
           ) : (
-            <div className="space-y-3">
-              {visibleActivities.map((activity) => (
-                <ActivityCard
-                  key={activity.activity_id}
-                  activity={activity}
-                  showAssignedLine={showAssignedLine}
-                  openConstraints={
-                    constraintsMap[activity.activity_id] ?? []
-                  }
-                />
-              ))}
+            <div className="space-y-8">
+              <section>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400">
+                    Remaining
+                  </span>
+                  <div className="h-px flex-1 bg-zinc-200 dark:bg-zinc-700" />
+                </div>
+
+                {notCompletedActivities.length === 0 ? (
+                  <p className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-6 text-center text-sm text-emerald-800 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-200">
+                    All activities completed! 🎉
+                  </p>
+                ) : (
+                  <>
+                    <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+                      {notCompletedActivities.length} activit
+                      {notCompletedActivities.length === 1 ? "y" : "ies"}{" "}
+                      remaining
+                    </p>
+                    <div className="mt-4 space-y-3">
+                      {notCompletedActivities.map((activity) => (
+                        <ActivityCard
+                          key={activity.activity_id}
+                          activity={activity}
+                          showAssignedLine={showAssignedLine}
+                          openConstraints={
+                            constraintsMap[activity.activity_id] ?? []
+                          }
+                        />
+                      ))}
+                    </div>
+                  </>
+                )}
+              </section>
+
+              {completedActivities.length > 0 && (
+                <section>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
+                      Completed
+                    </span>
+                    <div className="h-px min-w-[2rem] flex-1 bg-zinc-200 dark:bg-zinc-700" />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setShowCompletedSection((current) => !current)
+                      }
+                      className="text-sm font-medium text-emerald-700 transition-colors hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-300"
+                    >
+                      {showCompletedSection ? "▼" : "▶"} Completed (
+                      {completedActivities.length})
+                    </button>
+                  </div>
+
+                  {showCompletedSection && (
+                    <div className="mt-4 space-y-3">
+                      {completedActivities.map((activity) => (
+                        <div key={activity.activity_id} className="opacity-60">
+                          <ActivityCard
+                            activity={activity}
+                            showAssignedLine={showAssignedLine}
+                            openConstraints={
+                              constraintsMap[activity.activity_id] ?? []
+                            }
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </section>
+              )}
             </div>
           )}
         </>

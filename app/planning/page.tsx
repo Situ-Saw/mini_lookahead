@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Loader2 } from "lucide-react";
+import { Loader2, X } from "lucide-react";
 import {
   Bar,
   BarChart,
@@ -97,6 +97,15 @@ type SessionActivitySummary = {
 
 type ClosedSession = PlanningSession & {
   session_activities: SessionActivitySummary[] | null;
+};
+
+type SessionDetailActivity = {
+  activity_id: string;
+  activity_name: string;
+  was_completed: boolean;
+  variance_reason: string | null;
+  completed_at: string | null;
+  assigned_name: string | null;
 };
 
 type ChartDatum = {
@@ -494,6 +503,234 @@ function PpcChartTooltip({ active, payload }: ChartTooltipProps) {
   );
 }
 
+async function loadSessionDetailActivities(
+  sessionId: string,
+  projectId: string,
+): Promise<{ activities: SessionDetailActivity[]; error: string | null }> {
+  const { data: rows, error } = await supabase
+    .from("session_activities")
+    .select(
+      "activity_id, was_completed, variance_reason, completed_at, assigned_to",
+    )
+    .eq("session_id", sessionId)
+    .order("activity_id");
+
+  if (error) {
+    return { activities: [], error: error.message };
+  }
+
+  const sessionRows = rows ?? [];
+
+  if (sessionRows.length === 0) {
+    return { activities: [], error: null };
+  }
+
+  const activityIds = sessionRows.map((row) => row.activity_id);
+  const assigneeIds = [
+    ...new Set(
+      sessionRows
+        .map((row) => row.assigned_to)
+        .filter((userId): userId is string => typeof userId === "string"),
+    ),
+  ];
+
+  const activitiesQuery = supabase
+    .from("activities")
+    .select("activity_id, activity_name")
+    .eq("project_id", projectId)
+    .in("activity_id", activityIds);
+
+  const profilesQuery =
+    assigneeIds.length > 0
+      ? supabase.from("profiles").select("id, name").in("id", assigneeIds)
+      : Promise.resolve({ data: [], error: null });
+
+  const [activitiesResult, profilesResult] = await Promise.all([
+    activitiesQuery,
+    profilesQuery,
+  ]);
+
+  if (activitiesResult.error) {
+    return { activities: [], error: activitiesResult.error.message };
+  }
+
+  if (profilesResult.error) {
+    return { activities: [], error: profilesResult.error.message };
+  }
+
+  const nameByActivityId = new Map(
+    (activitiesResult.data ?? []).map((row) => [
+      row.activity_id,
+      row.activity_name,
+    ]),
+  );
+  const nameByUserId = new Map(
+    (profilesResult.data ?? []).map((row) => [row.id, row.name]),
+  );
+
+  const activities = sessionRows.map((row) => ({
+    activity_id: row.activity_id,
+    activity_name: nameByActivityId.get(row.activity_id) ?? "—",
+    was_completed: Boolean(row.was_completed),
+    variance_reason:
+      typeof row.variance_reason === "string" ? row.variance_reason : null,
+    completed_at:
+      typeof row.completed_at === "string" ? row.completed_at : null,
+    assigned_name:
+      typeof row.assigned_to === "string"
+        ? (nameByUserId.get(row.assigned_to) ?? "Unassigned")
+        : "Unassigned",
+  }));
+
+  return { activities, error: null };
+}
+
+function SessionDetailModal({
+  session,
+  activities,
+  isLoading,
+  errorMessage,
+  onClose,
+}: {
+  session: ClosedSession;
+  activities: SessionDetailActivity[];
+  isLoading: boolean;
+  errorMessage: string | null;
+  onClose: () => void;
+}) {
+  const total = activities.length;
+  const completed = activities.filter((row) => row.was_completed).length;
+  const ppc =
+    session.ppc_score !== null && session.ppc_score !== undefined
+      ? Number(session.ppc_score)
+      : calculatePpc(completed, total);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <button
+        type="button"
+        aria-label="Close dialog"
+        className="absolute inset-0 bg-black/50"
+        onClick={onClose}
+      />
+
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="session-detail-title"
+        className="relative z-10 max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-xl border border-zinc-200 bg-white p-6 shadow-xl dark:border-zinc-800 dark:bg-zinc-950"
+      >
+        <div className="flex items-start justify-between gap-4">
+          <h2
+            id="session-detail-title"
+            className="text-lg font-semibold text-zinc-900 dark:text-zinc-100"
+          >
+            Session Details —{" "}
+            {formatSessionRange(session.start_date, session.end_date)}
+          </h2>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="rounded-md p-1 text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+          >
+            <X className="h-5 w-5" aria-hidden="true" />
+          </button>
+        </div>
+
+        <p className="mt-4 text-sm text-zinc-600 dark:text-zinc-400">
+          Total: {total} | Completed: {completed} | PPC: {ppc}%
+        </p>
+
+        {isLoading ? (
+          <div className="mt-6 flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+            Loading session details...
+          </div>
+        ) : errorMessage ? (
+          <p className="mt-6 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
+            {errorMessage}
+          </p>
+        ) : activities.length === 0 ? (
+          <p className="mt-6 text-sm text-zinc-600 dark:text-zinc-400">
+            No activities recorded for this session.
+          </p>
+        ) : (
+          <div className="mt-6 overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
+            <table className="min-w-full divide-y divide-zinc-200 text-left text-sm dark:divide-zinc-800">
+              <thead className="bg-zinc-50 dark:bg-zinc-900/60">
+                <tr>
+                  <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+                    Activity ID
+                  </th>
+                  <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+                    Activity Name
+                  </th>
+                  <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+                    Assigned To
+                  </th>
+                  <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+                    Status
+                  </th>
+                  <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+                    Variance Reason
+                  </th>
+                  <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+                    Completed At
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-200 bg-white dark:divide-zinc-800 dark:bg-zinc-950">
+                {activities.map((row) => (
+                  <tr key={row.activity_id}>
+                    <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-zinc-700 dark:text-zinc-300">
+                      {row.activity_id}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 font-medium text-zinc-900 dark:text-zinc-100">
+                      {row.activity_name}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-zinc-700 dark:text-zinc-300">
+                      {row.assigned_name ?? "Unassigned"}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3">
+                      {row.was_completed ? (
+                        <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-800 ring-1 ring-inset ring-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-200 dark:ring-emerald-900">
+                          Completed
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-1 text-xs font-medium text-red-800 ring-1 ring-inset ring-red-200 dark:bg-red-950/50 dark:text-red-200 dark:ring-red-900">
+                          Not Completed
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-zinc-700 dark:text-zinc-300">
+                      {row.variance_reason ?? "—"}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-zinc-700 dark:text-zinc-300">
+                      {formatDateTime(row.completed_at)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function VarianceCloseModal({
   incompleteActivities,
   varianceReasons,
@@ -667,6 +904,14 @@ export default function PlanningPage() {
   >({});
   const [otherReasons, setOtherReasons] = useState<Record<string, string>>({});
   const [varianceModalError, setVarianceModalError] = useState<string | null>(
+    null,
+  );
+  const [detailSession, setDetailSession] = useState<ClosedSession | null>(null);
+  const [sessionDetailActivities, setSessionDetailActivities] = useState<
+    SessionDetailActivity[]
+  >([]);
+  const [isLoadingDetail, setIsLoadingDetail] = useState(false);
+  const [sessionDetailError, setSessionDetailError] = useState<string | null>(
     null,
   );
 
@@ -1219,6 +1464,36 @@ export default function PlanningPage() {
     setOtherReasons({});
     setVarianceModalError(null);
   }, [isClosing]);
+
+  const handleOpenSessionDetail = useCallback(
+    async (session: ClosedSession) => {
+      if (!activeProject) {
+        return;
+      }
+
+      setDetailSession(session);
+      setSessionDetailActivities([]);
+      setSessionDetailError(null);
+      setIsLoadingDetail(true);
+
+      const { activities, error } = await loadSessionDetailActivities(
+        session.id,
+        activeProject.id,
+      );
+
+      setSessionDetailActivities(activities);
+      setSessionDetailError(error);
+      setIsLoadingDetail(false);
+    },
+    [activeProject],
+  );
+
+  const handleCloseSessionDetail = useCallback(() => {
+    setDetailSession(null);
+    setSessionDetailActivities([]);
+    setSessionDetailError(null);
+    setIsLoadingDetail(false);
+  }, []);
 
   const handleVarianceReasonChange = useCallback(
     (activityId: string, reason: VarianceReason) => {
@@ -1952,6 +2227,9 @@ export default function PlanningPage() {
                     <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
                       Variance Reasons
                     </th>
+                    <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+                      Details
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-200 bg-white dark:divide-zinc-800 dark:bg-zinc-950">
@@ -2006,6 +2284,15 @@ export default function PlanningPage() {
                             </div>
                           )}
                         </td>
+                        <td className="px-4 py-3">
+                          <button
+                            type="button"
+                            onClick={() => void handleOpenSessionDetail(session)}
+                            className="rounded border border-zinc-300 bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
+                          >
+                            See Details
+                          </button>
+                        </td>
                       </tr>
                     );
                   })}
@@ -2015,6 +2302,16 @@ export default function PlanningPage() {
           </>
         )}
       </section>
+
+      {detailSession && (
+        <SessionDetailModal
+          session={detailSession}
+          activities={sessionDetailActivities}
+          isLoading={isLoadingDetail}
+          errorMessage={sessionDetailError}
+          onClose={handleCloseSessionDetail}
+        />
+      )}
 
       {showVarianceModal && (
         <VarianceCloseModal
