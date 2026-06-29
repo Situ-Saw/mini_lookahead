@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   AlertTriangle,
+  Calendar,
   CheckCircle2,
   Circle,
   ClipboardList,
@@ -298,58 +299,130 @@ const VARIANT_STYLES: Record<
   KpiVariant,
   {
     card: string;
-    border: string;
+    gradient: string;
     label: string;
     value: string;
-    icon: string;
+    iconBg: string;
+    iconColor: string;
+    leftAccent: string;
   }
 > = {
   neutral: {
     card: "bg-white dark:bg-zinc-950",
-    border: "border-l-zinc-400 dark:border-l-zinc-500",
+    gradient:
+      "bg-gradient-to-br from-zinc-50 to-white dark:from-zinc-900/60 dark:to-zinc-950",
     label: "text-zinc-500 dark:text-zinc-400",
     value: "text-zinc-900 dark:text-zinc-100",
-    icon: "text-zinc-400 dark:text-zinc-500",
+    iconBg: "bg-zinc-100 dark:bg-zinc-800",
+    iconColor: "text-zinc-600 dark:text-zinc-400",
+    leftAccent: "border-l-zinc-400 dark:border-l-zinc-500",
   },
   green: {
-    card: "bg-emerald-50/80 dark:bg-emerald-950/20",
-    border: "border-l-emerald-500 dark:border-l-emerald-400",
+    card: "bg-white dark:bg-zinc-950",
+    gradient:
+      "bg-gradient-to-br from-emerald-50 to-white dark:from-emerald-950/30 dark:to-zinc-950",
     label: "text-emerald-700 dark:text-emerald-300",
     value: "text-emerald-900 dark:text-emerald-100",
-    icon: "text-emerald-500 dark:text-emerald-400",
+    iconBg: "bg-emerald-100 dark:bg-emerald-900/40",
+    iconColor: "text-emerald-600 dark:text-emerald-400",
+    leftAccent: "border-l-emerald-500 dark:border-l-emerald-400",
   },
   blue: {
-    card: "bg-blue-50/80 dark:bg-blue-950/20",
-    border: "border-l-blue-500 dark:border-l-blue-400",
+    card: "bg-white dark:bg-zinc-950",
+    gradient:
+      "bg-gradient-to-br from-blue-50 to-white dark:from-blue-950/30 dark:to-zinc-950",
     label: "text-blue-700 dark:text-blue-300",
     value: "text-blue-900 dark:text-blue-100",
-    icon: "text-blue-500 dark:text-blue-400",
+    iconBg: "bg-blue-100 dark:bg-blue-900/40",
+    iconColor: "text-blue-600 dark:text-blue-400",
+    leftAccent: "border-l-blue-500 dark:border-l-blue-400",
   },
   gray: {
-    card: "bg-zinc-50/80 dark:bg-zinc-900/40",
-    border: "border-l-zinc-400 dark:border-l-zinc-500",
+    card: "bg-white dark:bg-zinc-950",
+    gradient:
+      "bg-gradient-to-br from-zinc-50 to-white dark:from-zinc-900/60 dark:to-zinc-950",
     label: "text-zinc-600 dark:text-zinc-400",
     value: "text-zinc-800 dark:text-zinc-200",
-    icon: "text-zinc-400 dark:text-zinc-500",
+    iconBg: "bg-zinc-100 dark:bg-zinc-800",
+    iconColor: "text-zinc-500 dark:text-zinc-400",
+    leftAccent: "border-l-zinc-400 dark:border-l-zinc-500",
   },
   amber: {
-    card: "bg-amber-50/80 dark:bg-amber-950/20",
-    border: "border-l-amber-500 dark:border-l-amber-400",
+    card: "bg-white dark:bg-zinc-950",
+    gradient:
+      "bg-gradient-to-br from-amber-50 to-white dark:from-amber-950/30 dark:to-zinc-950",
     label: "text-amber-700 dark:text-amber-300",
     value: "text-amber-900 dark:text-amber-100",
-    icon: "text-amber-500 dark:text-amber-400",
+    iconBg: "bg-amber-100 dark:bg-amber-900/40",
+    iconColor: "text-amber-600 dark:text-amber-400",
+    leftAccent: "border-l-amber-500 dark:border-l-amber-400",
   },
   red: {
-    card: "bg-red-50/80 dark:bg-red-950/20",
-    border: "border-l-red-500 dark:border-l-red-400",
+    card: "bg-white dark:bg-zinc-950",
+    gradient:
+      "bg-gradient-to-br from-red-50 to-white dark:from-red-950/30 dark:to-zinc-950",
     label: "text-red-700 dark:text-red-300",
     value: "text-red-900 dark:text-red-100",
-    icon: "text-red-500 dark:text-red-400",
+    iconBg: "bg-red-100 dark:bg-red-900/40",
+    iconColor: "text-red-600 dark:text-red-400",
+    leftAccent: "border-l-red-500 dark:border-l-red-400",
   },
 };
 
+function getHealthStatus(
+  ppc: number,
+  hasData: boolean,
+): { label: string; color: string } {
+  if (!hasData) {
+    return {
+      label: "No Data",
+      color:
+        "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400",
+    };
+  }
+  if (ppc >= 71) {
+    return {
+      label: "On Track",
+      color:
+        "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300",
+    };
+  }
+  if (ppc >= 41) {
+    return {
+      label: "At Risk",
+      color:
+        "bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300",
+    };
+  }
+  return {
+    label: "Delayed",
+    color: "bg-red-100 text-red-800 dark:bg-red-950/50 dark:text-red-300",
+  };
+}
+
+const STATUS_BADGE_STYLES = {
+  red: "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400",
+  emerald:
+    "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400",
+  zinc: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
+} as const;
+
+function ChipSkeleton() {
+  return (
+    <div className="h-7 w-32 animate-pulse rounded-full bg-zinc-200 dark:bg-zinc-800" />
+  );
+}
+
 function KpiSkeleton() {
-  return <div className="mt-3 h-10 w-24 animate-pulse rounded-lg bg-zinc-200 dark:bg-zinc-800" />;
+  return (
+    <div className="mt-4 h-14 w-28 animate-pulse rounded-xl bg-zinc-200 dark:bg-zinc-800" />
+  );
+}
+
+function CardSkeleton() {
+  return (
+    <div className="h-32 animate-pulse rounded-2xl bg-zinc-200 dark:bg-zinc-800" />
+  );
 }
 
 function KpiCard({
@@ -359,6 +432,11 @@ function KpiCard({
   isLoading,
   variant = "neutral",
   icon: Icon,
+  showLeftAccent = false,
+  valueClassName,
+  trendText,
+  trendColor,
+  criticalBackground = false,
 }: {
   label: string;
   value?: number;
@@ -366,29 +444,58 @@ function KpiCard({
   isLoading: boolean;
   variant?: KpiVariant;
   icon: LucideIcon;
+  showLeftAccent?: boolean;
+  valueClassName?: string;
+  trendText?: string;
+  trendColor?: string;
+  criticalBackground?: boolean;
 }) {
   const styles = VARIANT_STYLES[variant];
   const rendered = displayValue ?? value?.toLocaleString() ?? "—";
+  const cardGradient = criticalBackground
+    ? "bg-gradient-to-br from-red-50 to-white dark:from-red-950/40 dark:to-zinc-950"
+    : styles.gradient;
 
   return (
     <div
-      className={`relative overflow-hidden rounded-xl border border-zinc-200 border-l-4 p-5 shadow-sm transition-shadow hover:shadow-md dark:border-zinc-800 ${styles.card} ${styles.border}`}
+      className={`overflow-hidden rounded-2xl border border-zinc-100 p-6 shadow-md transition-shadow hover:shadow-lg dark:border-zinc-800 ${cardGradient} ${
+        showLeftAccent ? `border-l-4 ${styles.leftAccent}` : ""
+      }`}
     >
-      <Icon
-        className={`absolute right-4 top-4 h-5 w-5 ${styles.icon}`}
-        aria-hidden="true"
-      />
-      <p className={`pr-8 text-sm font-medium ${styles.label}`}>{label}</p>
-      {isLoading ? (
-        <KpiSkeleton />
-      ) : (
-        <p className={`mt-2 text-4xl font-bold tracking-tight ${styles.value}`}>
-          {rendered}
-        </p>
-      )}
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0 flex-1">
+          <p className={`text-sm font-medium ${styles.label}`}>{label}</p>
+          {isLoading ? (
+            <KpiSkeleton />
+          ) : (
+            <>
+              <p
+                className={`mt-3 text-5xl font-black tracking-tight ${valueClassName ?? styles.value}`}
+              >
+                {rendered}
+              </p>
+              {trendText && (
+                <p className={`mt-1 text-xs font-medium ${trendColor ?? ""}`}>
+                  {trendText}
+                </p>
+              )}
+            </>
+          )}
+        </div>
+        <div className={`shrink-0 rounded-xl p-2.5 ${styles.iconBg}`}>
+          <Icon className={`h-5 w-5 ${styles.iconColor}`} aria-hidden="true" />
+        </div>
+      </div>
     </div>
   );
 }
+
+type TimelineHighlight = "delayed" | "early" | "on-track" | "neutral";
+
+type StatusBadge = {
+  label: string;
+  className: string;
+};
 
 function TimelineCard({
   label,
@@ -396,26 +503,69 @@ function TimelineCard({
   isLoading,
   variant = "neutral",
   subtext,
+  icon: Icon,
+  highlight = "neutral",
+  statusBadge,
+  schedulePill,
 }: {
   label: string;
   value: string;
   isLoading: boolean;
   variant?: KpiVariant;
   subtext?: string;
+  icon?: LucideIcon;
+  highlight?: TimelineHighlight;
+  statusBadge?: StatusBadge;
+  schedulePill?: StatusBadge;
 }) {
   const styles = VARIANT_STYLES[variant];
 
+  const highlightClasses: Record<TimelineHighlight, string> = {
+    delayed:
+      "border-2 border-red-500 bg-white dark:border-red-500 dark:bg-zinc-950",
+    early:
+      "border-2 border-emerald-500 bg-white dark:border-emerald-500 dark:bg-zinc-950",
+    "on-track":
+      "border-2 border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900/40",
+    neutral: `border-zinc-100 dark:border-zinc-800 ${styles.gradient}`,
+  };
+
   return (
     <div
-      className={`rounded-xl border border-zinc-200 border-l-4 p-5 shadow-sm transition-shadow hover:shadow-md dark:border-zinc-800 ${styles.card} ${styles.border}`}
+      className={`overflow-hidden rounded-2xl border p-6 shadow-md transition-shadow hover:shadow-lg ${highlightClasses[highlight]}`}
     >
-      <p className={`text-sm font-medium ${styles.label}`}>{label}</p>
+      <div className="flex items-start justify-between gap-3">
+        <p className={`text-sm font-medium ${styles.label}`}>{label}</p>
+        {Icon && (
+          <div className={`shrink-0 rounded-xl p-2 ${styles.iconBg}`}>
+            <Icon className={`h-4 w-4 ${styles.iconColor}`} aria-hidden="true" />
+          </div>
+        )}
+      </div>
       {isLoading ? (
         <KpiSkeleton />
       ) : (
-        <p className={`mt-2 text-2xl font-bold tracking-tight sm:text-3xl ${styles.value}`}>
-          {value}
-        </p>
+        <>
+          <p
+            className={`mt-3 text-2xl font-bold tracking-tight sm:text-3xl ${styles.value}`}
+          >
+            {value}
+          </p>
+          {statusBadge && (
+            <span
+              className={`mt-2 inline-flex rounded-full px-2.5 py-0.5 text-xs font-bold ${statusBadge.className}`}
+            >
+              {statusBadge.label}
+            </span>
+          )}
+          {schedulePill && (
+            <span
+              className={`mt-2 inline-flex rounded-full px-2.5 py-0.5 text-xs font-bold ${schedulePill.className}`}
+            >
+              {schedulePill.label}
+            </span>
+          )}
+        </>
       )}
       {subtext && !isLoading && (
         <p className={`mt-2 text-xs ${styles.label}`}>{subtext}</p>
@@ -424,15 +574,48 @@ function TimelineCard({
   );
 }
 
-function SectionHeader({ title }: { title: string }) {
+function SectionHeader({
+  title,
+  icon: Icon,
+  subtitle,
+}: {
+  title: string;
+  icon?: LucideIcon;
+  subtitle?: string;
+}) {
   return (
-    <div className="mb-4">
-      <p className="text-xs font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
-        {title}
-      </p>
-      <div className="mt-2 h-px w-full bg-zinc-200 dark:bg-zinc-800" />
+    <div className="mb-6">
+      <div className="flex items-center gap-2.5">
+        {Icon && (
+          <div className="rounded-lg bg-blue-50 p-1.5 dark:bg-blue-950/40">
+            <Icon className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+          </div>
+        )}
+        <h2 className="text-base font-bold uppercase tracking-widest text-zinc-900 dark:text-zinc-100">
+          {title}
+        </h2>
+      </div>
+      {subtitle && (
+        <p className="ml-9 mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+          {subtitle}
+        </p>
+      )}
+      <div className="mt-3 h-px w-full bg-zinc-200 dark:bg-zinc-800" />
     </div>
   );
+}
+
+function getPpcPillClasses(ppc: number): string {
+  if (ppc >= 100) {
+    return "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300";
+  }
+  if (ppc >= 71) {
+    return "bg-blue-100 text-blue-800 dark:bg-blue-950/50 dark:text-blue-300";
+  }
+  if (ppc >= 41) {
+    return "bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300";
+  }
+  return "bg-red-100 text-red-800 dark:bg-red-950/50 dark:text-red-300";
 }
 
 function CircularProgress({
@@ -442,28 +625,28 @@ function CircularProgress({
   value: number;
   strokeClass: string;
 }) {
-  const radius = 52;
+  const radius = 64;
   const circumference = 2 * Math.PI * radius;
   const clamped = Math.min(100, Math.max(0, value));
   const offset = circumference - (clamped / 100) * circumference;
 
   return (
     <svg
-      className="h-36 w-36 shrink-0 -rotate-90"
-      viewBox="0 0 120 120"
+      className="h-44 w-44 shrink-0 -rotate-90"
+      viewBox="0 0 140 140"
       aria-hidden="true"
     >
       <circle
-        cx="60"
-        cy="60"
+        cx="70"
+        cy="70"
         r={radius}
         fill="none"
         strokeWidth="10"
         className="stroke-zinc-200 dark:stroke-zinc-800"
       />
       <circle
-        cx="60"
-        cy="60"
+        cx="70"
+        cy="70"
         r={radius}
         fill="none"
         strokeWidth="10"
@@ -631,12 +814,34 @@ export default function DashboardPage() {
   const projectedDurationLonger =
     (stats?.projectedDurationDays ?? 0) > (stats?.plannedDurationDays ?? 0);
 
+  const netDelayHighlight: TimelineHighlight = useMemo(() => {
+    const net = stats?.netDelayDays ?? null;
+    if (net === null) return "neutral";
+    if (net > 0) return "delayed";
+    if (net < 0) return "early";
+    return "on-track";
+  }, [stats?.netDelayDays]);
+
+  const durationDifference = useMemo(() => {
+    const planned = stats?.plannedDurationDays;
+    const projected = stats?.projectedDurationDays;
+    if (
+      planned === null ||
+      planned === undefined ||
+      projected === null ||
+      projected === undefined
+    ) {
+      return null;
+    }
+    return projected - planned;
+  }, [stats?.plannedDurationDays, stats?.projectedDurationDays]);
+
   const showBaselineBanner =
     !isLoading && stats !== null && stats.baselineCount === 0;
 
   if (isProjectLoading) {
     return (
-      <main className="flex min-h-[50vh] items-center justify-center bg-zinc-50/50 dark:bg-zinc-950">
+      <main className="flex min-h-[50vh] items-center justify-center bg-zinc-50 dark:bg-zinc-950">
         <Loader2
           className="h-8 w-8 animate-spin text-zinc-400"
           aria-label="Loading project"
@@ -647,8 +852,8 @@ export default function DashboardPage() {
 
   if (!activeProject) {
     return (
-      <main className="min-h-full bg-zinc-50/50 dark:bg-zinc-950">
-        <div className="mx-auto w-full max-w-7xl flex-1 p-6 sm:p-10">
+      <main className="min-h-full bg-zinc-50 dark:bg-zinc-950">
+        <div className="mx-auto w-full max-w-7xl flex-1 px-6 py-8 sm:px-10">
           <div className="rounded-xl border border-zinc-200 bg-white p-8 text-center dark:border-zinc-800 dark:bg-zinc-950">
             <p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
               No project selected.
@@ -668,69 +873,70 @@ export default function DashboardPage() {
   }
 
   return (
-    <main className="min-h-full bg-zinc-50/50 dark:bg-zinc-950">
-      <div className="mx-auto w-full max-w-7xl flex-1 space-y-6 p-6 sm:p-10">
+    <main className="min-h-full bg-zinc-50 dark:bg-zinc-950">
+      <div className="mx-auto w-full max-w-7xl flex-1 space-y-8 px-6 py-8 sm:px-10">
         {showBaselineBanner && (
-          <div className="flex flex-col gap-4 rounded-xl border border-amber-300 bg-gradient-to-r from-amber-100 via-amber-50 to-amber-100 px-6 py-5 shadow-md sm:flex-row sm:items-center sm:justify-between dark:border-amber-800 dark:from-amber-950/60 dark:via-amber-950/30 dark:to-amber-950/60">
-            <div className="flex items-start gap-4">
-              <div className="rounded-full bg-amber-200 p-3 dark:bg-amber-900/60">
+          <div className="rounded-2xl border-2 border-dashed border-amber-300 bg-amber-50 px-8 py-10 dark:border-amber-800 dark:bg-amber-950/20">
+            <div className="flex flex-col items-center text-center">
+              <div className="rounded-full bg-amber-100 p-4 dark:bg-amber-900/40">
                 <AlertTriangle
-                  className="h-6 w-6 text-amber-800 dark:text-amber-200"
+                  className="h-8 w-8 text-amber-600 dark:text-amber-400"
                   aria-hidden="true"
                 />
               </div>
-              <div>
-                <p className="font-semibold text-amber-950 dark:text-amber-100">
-                  No baseline imported yet
-                </p>
-                <p className="mt-1 text-sm text-amber-900 dark:text-amber-200">
-                  Import your baseline schedule to enable PPC and delay analysis.
-                </p>
-              </div>
+              <h3 className="mt-4 text-lg font-semibold text-amber-900 dark:text-amber-100">
+                No baseline imported yet
+              </h3>
+              <p className="mt-2 max-w-sm text-sm text-amber-700 dark:text-amber-300">
+                Import your Primavera P6 baseline schedule to unlock PPC tracking,
+                delay analysis, and project timeline.
+              </p>
+              <Link
+                href="/import"
+                className="mt-6 inline-flex items-center gap-2 rounded-xl bg-amber-600 px-6 py-3 text-sm font-semibold text-white shadow-md transition-colors hover:bg-amber-700"
+              >
+                Import Baseline →
+              </Link>
             </div>
-            <Link
-              href="/import"
-              className="inline-flex shrink-0 items-center justify-center rounded-lg bg-amber-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-amber-700 dark:bg-amber-500 dark:hover:bg-amber-400"
-            >
-              Import Baseline
-            </Link>
           </div>
         )}
 
-        <div className="rounded-xl border border-zinc-200 bg-gradient-to-br from-zinc-50 to-white px-6 py-6 shadow-sm dark:border-zinc-800 dark:from-zinc-900/60 dark:to-zinc-950 sm:px-8">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="rounded-2xl bg-zinc-900 px-8 py-8 shadow-xl dark:bg-zinc-800">
+          <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
+              <p className="text-xs font-semibold uppercase tracking-widest text-zinc-400">
+                Construction Planning
+              </p>
+              <h1 className="mt-2 text-3xl font-bold tracking-tight text-white sm:text-4xl">
                 Project Dashboard
               </h1>
-              <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-                Overall project health and PPC summary
-              </p>
-              <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-                <span className="inline-flex items-center rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
-                  {activeProject.code} — {activeProject.name}
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <span className="rounded-full bg-zinc-700 px-3 py-1 text-xs font-medium text-zinc-300">
+                  {activeProject.code}
                 </span>
-              </p>
+                <span className="text-sm text-zinc-400">{activeProject.name}</span>
+              </div>
             </div>
 
-            <div className="flex items-center gap-3">
-              <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                {lastUpdated
-                  ? `Last updated: ${formatLastUpdated(lastUpdated)}`
-                  : "Loading..."}
-              </p>
+            <div className="flex flex-col items-start gap-3 sm:items-end">
               <button
                 type="button"
                 onClick={handleRefresh}
                 disabled={isLoading}
                 aria-label="Refresh dashboard data"
-                className="inline-flex items-center justify-center rounded-lg border border-zinc-300 bg-white p-2 text-zinc-700 transition-colors hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
+                className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-2 text-sm font-medium text-zinc-300 transition-colors hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-600"
               >
                 <RefreshCw
                   className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`}
                   aria-hidden="true"
                 />
+                Refresh
               </button>
+              <p className="text-xs text-zinc-500">
+                {lastUpdated
+                  ? `Updated ${formatLastUpdated(lastUpdated)}`
+                  : "Loading..."}
+              </p>
             </div>
           </div>
         </div>
@@ -743,146 +949,199 @@ export default function DashboardPage() {
 
         <section>
           <SectionHeader title="Activity Status" />
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <KpiCard
-              label="Total Activities"
-              value={stats?.totalActivities ?? 0}
-              isLoading={isLoading}
-              variant="neutral"
-              icon={ClipboardList}
-            />
-            <KpiCard
-              label="Completed"
-              value={stats?.completedActivities ?? 0}
-              isLoading={isLoading}
-              variant="green"
-              icon={CheckCircle2}
-            />
-            <KpiCard
-              label="In Progress"
-              value={stats?.inProgressActivities ?? 0}
-              isLoading={isLoading}
-              variant="blue"
-              icon={Clock}
-            />
-            <KpiCard
-              label="Not Started"
-              value={stats?.notStartedActivities ?? 0}
-              isLoading={isLoading}
-              variant="gray"
-              icon={Circle}
-            />
-          </div>
+          {isLoading ? (
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <CardSkeleton />
+              <CardSkeleton />
+              <CardSkeleton />
+              <CardSkeleton />
+            </div>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <KpiCard
+                label="Total Activities"
+                value={stats?.totalActivities ?? 0}
+                isLoading={isLoading}
+                variant="neutral"
+                icon={ClipboardList}
+              />
+              <KpiCard
+                label="Completed"
+                value={stats?.completedActivities ?? 0}
+                isLoading={isLoading}
+                variant="green"
+                icon={CheckCircle2}
+              />
+              <KpiCard
+                label="In Progress"
+                value={stats?.inProgressActivities ?? 0}
+                isLoading={isLoading}
+                variant="blue"
+                icon={Clock}
+              />
+              <KpiCard
+                label="Not Started"
+                value={stats?.notStartedActivities ?? 0}
+                isLoading={isLoading}
+                variant="gray"
+                icon={Circle}
+              />
+            </div>
+          )}
         </section>
 
         <section>
           <SectionHeader title="Delay Analysis" />
-          <div className="grid gap-4 sm:grid-cols-3">
-            <KpiCard
-              label="Delayed Activities"
-              value={stats?.delayedActivities ?? 0}
-              isLoading={isLoading}
-              variant="red"
-              icon={AlertTriangle}
-            />
-            <KpiCard
-              label="Average Delay"
-              displayValue={averageDelayDisplay}
-              isLoading={isLoading}
-              variant="amber"
-              icon={Timer}
-            />
-            <KpiCard
-              label="Running Early"
-              value={stats?.earlyActivities ?? 0}
-              isLoading={isLoading}
-              variant="green"
-              icon={TrendingUp}
-            />
-          </div>
+          {isLoading ? (
+            <div className="grid gap-4 sm:grid-cols-3">
+              <CardSkeleton />
+              <CardSkeleton />
+              <CardSkeleton />
+            </div>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-3">
+              <KpiCard
+                label="Delayed Activities"
+                value={stats?.delayedActivities ?? 0}
+                isLoading={isLoading}
+                variant="red"
+                icon={AlertTriangle}
+                showLeftAccent
+              />
+              <KpiCard
+                label="Average Delay"
+                displayValue={averageDelayDisplay}
+                isLoading={isLoading}
+                variant="amber"
+                icon={Timer}
+                valueClassName="text-amber-600 dark:text-amber-400"
+              />
+              <KpiCard
+                label="Running Early"
+                value={stats?.earlyActivities ?? 0}
+                isLoading={isLoading}
+                variant="green"
+                icon={TrendingUp}
+                valueClassName="text-emerald-600 dark:text-emerald-400"
+              />
+            </div>
+          )}
         </section>
 
         <section>
           <SectionHeader title="Constraints" />
-          <div className="grid gap-4 sm:grid-cols-3">
-            <KpiCard
-              label="Total Constraints"
-              value={stats?.totalConstraints ?? 0}
-              isLoading={isLoading}
-              variant="neutral"
-              icon={ShieldAlert}
-            />
-            <KpiCard
-              label="Open Constraints"
-              value={stats?.openConstraints ?? 0}
-              isLoading={isLoading}
-              variant="amber"
-              icon={ShieldX}
-            />
-            <KpiCard
-              label="Closed Constraints"
-              value={stats?.closedConstraints ?? 0}
-              isLoading={isLoading}
-              variant="green"
-              icon={ShieldCheck}
-            />
-          </div>
+          {isLoading ? (
+            <div className="grid gap-4 sm:grid-cols-3">
+              <CardSkeleton />
+              <CardSkeleton />
+              <CardSkeleton />
+            </div>
+          ) : (
+            <>
+              <div className="grid gap-4 sm:grid-cols-3">
+                <KpiCard
+                  label="Total Constraints"
+                  value={stats?.totalConstraints ?? 0}
+                  isLoading={isLoading}
+                  variant="neutral"
+                  icon={ShieldAlert}
+                />
+                <KpiCard
+                  label="Open Constraints"
+                  value={stats?.openConstraints ?? 0}
+                  isLoading={isLoading}
+                  variant="amber"
+                  icon={ShieldX}
+                />
+                <KpiCard
+                  label="Closed Constraints"
+                  value={stats?.closedConstraints ?? 0}
+                  isLoading={isLoading}
+                  variant="green"
+                  icon={ShieldCheck}
+                />
+              </div>
+
+              {(stats?.totalConstraints ?? 0) > 0 && (
+                <div className="mt-4 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+                  <div className="mb-2 flex justify-between text-xs text-zinc-500 dark:text-zinc-400">
+                    <span>Open</span>
+                    <span>Closed</span>
+                  </div>
+                  <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+                    <div
+                      className="h-full rounded-full bg-emerald-500 transition-all duration-500 dark:bg-emerald-400"
+                      style={{
+                        width: `${((stats?.closedConstraints ?? 0) / (stats?.totalConstraints ?? 1)) * 100}%`,
+                      }}
+                    />
+                  </div>
+                  <p className="mt-2 text-right text-xs text-zinc-500 dark:text-zinc-400">
+                    {stats?.closedConstraints ?? 0} of {stats?.totalConstraints ?? 0}{" "}
+                    resolved
+                  </p>
+                </div>
+              )}
+            </>
+          )}
         </section>
 
         <section>
           <SectionHeader title="Project Completion" />
           <div
-            className={`rounded-xl border border-zinc-200 bg-gradient-to-br p-6 shadow-sm dark:border-zinc-800 sm:p-8 ${ppcColors.gradient}`}
+            className={`rounded-2xl border border-zinc-100 bg-gradient-to-br p-6 shadow-md dark:border-zinc-800 sm:p-8 ${ppcColors.gradient}`}
           >
-            <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-              Project Completion
-            </h2>
-
             {isLoading ? (
-              <div className="mt-6 flex flex-col gap-6 lg:flex-row lg:items-center">
-                <div className="h-36 w-36 animate-pulse rounded-full bg-zinc-200 dark:bg-zinc-800" />
+              <div className="flex flex-col gap-6 lg:flex-row lg:items-center">
+                <div className="h-44 w-44 animate-pulse rounded-full bg-zinc-200 dark:bg-zinc-800" />
                 <div className="flex-1 space-y-4">
-                  <div className="h-16 w-48 animate-pulse rounded-lg bg-zinc-200 dark:bg-zinc-800" />
-                  <div className="h-3 w-full animate-pulse rounded-full bg-zinc-200 dark:bg-zinc-800" />
-                  <div className="h-4 w-64 animate-pulse rounded bg-zinc-200 dark:bg-zinc-800" />
+                  <div className="h-20 w-56 animate-pulse rounded-2xl bg-zinc-200 dark:bg-zinc-800" />
+                  <div className="h-4 w-full animate-pulse rounded-full bg-zinc-200 dark:bg-zinc-800" />
+                  <div className="h-32 animate-pulse rounded-2xl bg-zinc-200 dark:bg-zinc-800" />
                 </div>
               </div>
             ) : (
-              <div className="mt-6 flex flex-col gap-8 lg:flex-row lg:items-center">
-                <div className="relative flex items-center justify-center">
+              <div className="flex flex-col gap-8 lg:flex-row lg:items-center">
+                <div className="relative flex shrink-0 items-center justify-center">
                   <CircularProgress value={ppc} strokeClass={ppcColors.stroke} />
                   <span
-                    className={`absolute text-2xl font-bold ${ppcColors.text}`}
+                    className={`absolute text-3xl font-black ${ppcColors.text}`}
                   >
                     {ppc.toFixed(1)}%
                   </span>
                 </div>
 
                 <div className="flex-1">
+                  <span
+                    className={`inline-flex rounded-full px-4 py-1.5 text-sm font-semibold ${getPpcPillClasses(ppc)}`}
+                  >
+                    {ppcInterpretation}
+                  </span>
+
+                  <p className="mt-6 text-4xl font-black text-zinc-900 dark:text-zinc-100">
+                    {stats?.completedActivities ?? 0}
+                    <span className="text-xl font-medium text-zinc-400 dark:text-zinc-500">
+                      /{stats?.totalActivities ?? 0}
+                    </span>
+                  </p>
+                  <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+                    activities completed
+                  </p>
+
                   <p
-                    className={`text-6xl font-bold tracking-tight sm:text-7xl ${ppcColors.text}`}
+                    className={`mt-4 text-3xl font-black tracking-tight sm:text-4xl ${ppcColors.text}`}
                   >
                     {ppc.toFixed(1)}% of activities completed
                   </p>
 
-                  <div className="mt-6 h-3 w-full overflow-hidden rounded-full bg-zinc-200/80 dark:bg-zinc-800">
+                  <div className="mt-6 h-4 w-full overflow-hidden rounded-full bg-zinc-200/80 dark:bg-zinc-800">
                     <div
                       className={`h-full rounded-full transition-all duration-500 ${ppcColors.bar}`}
                       style={{ width: `${Math.min(ppc, 100)}%` }}
                     />
                   </div>
 
-                  <p className="mt-4 text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                    {ppcInterpretation}
-                  </p>
-
-                  <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">
-                    {stats?.completedActivities ?? 0} of{" "}
-                    {stats?.totalActivities ?? 0} activities completed across
-                    the entire project
-                  </p>
-
-                  <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-500">
+                  <p className="mt-4 text-xs text-zinc-500 dark:text-zinc-500">
                     This shows overall project progress — how many activities
                     are marked complete out of the total. This is different
                     from PPC (Percent Plan Complete), which measures weekly
@@ -896,35 +1155,49 @@ export default function DashboardPage() {
 
         <section>
           <SectionHeader title="Project Timeline" />
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <TimelineCard
-              label="Planned Start"
-              value={formatDisplayDate(stats?.plannedStartDate ?? null)}
-              isLoading={isLoading}
-              variant="neutral"
-            />
-            <TimelineCard
-              label="Planned End"
-              value={formatDisplayDate(stats?.plannedEndDate ?? null)}
-              isLoading={isLoading}
-              variant="neutral"
-            />
-            <TimelineCard
-              label="Projected End Date"
-              value={formatDisplayDate(stats?.projectedEndDate ?? null)}
-              isLoading={isLoading}
-              variant={projectedEndVariant}
-            />
-            <TimelineCard
-              label="Net Delay Impact"
-              value={netDelayDisplay.value}
-              subtext={netDelayDisplay.subtext}
-              isLoading={isLoading}
-              variant={netDelayDisplay.variant}
-            />
-          </div>
+          {isLoading ? (
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <CardSkeleton />
+              <CardSkeleton />
+              <CardSkeleton />
+              <CardSkeleton />
+            </div>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <TimelineCard
+                label="Planned Start"
+                value={formatDisplayDate(stats?.plannedStartDate ?? null)}
+                isLoading={isLoading}
+                variant="neutral"
+                icon={Calendar}
+              />
+              <TimelineCard
+                label="Planned End"
+                value={formatDisplayDate(stats?.plannedEndDate ?? null)}
+                isLoading={isLoading}
+                variant="neutral"
+                icon={Calendar}
+              />
+              <TimelineCard
+                label="Projected End Date"
+                value={formatDisplayDate(stats?.projectedEndDate ?? null)}
+                isLoading={isLoading}
+                variant={projectedEndVariant}
+                icon={Calendar}
+              />
+              <TimelineCard
+                label="Net Delay Impact"
+                value={netDelayDisplay.value}
+                subtext={netDelayDisplay.subtext}
+                isLoading={isLoading}
+                variant={netDelayDisplay.variant}
+                icon={Timer}
+                highlight={netDelayHighlight}
+              />
+            </div>
+          )}
 
-          <div className="mt-4 rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+          <div className="mt-4 rounded-2xl border border-zinc-100 bg-white p-6 shadow-md dark:border-zinc-800 dark:bg-zinc-950">
             {isLoading ? (
               <div className="space-y-4">
                 <div className="flex justify-between">
@@ -963,9 +1236,23 @@ export default function DashboardPage() {
                   </p>
                 </div>
 
-                <div className="space-y-4">
+                {durationDifference !== null && durationDifference !== 0 && (
+                  <p
+                    className={`mb-4 text-sm font-semibold ${
+                      durationDifference > 0
+                        ? "text-red-600 dark:text-red-400"
+                        : "text-emerald-600 dark:text-emerald-400"
+                    }`}
+                  >
+                    {durationDifference > 0
+                      ? `+${durationDifference} days over planned`
+                      : `${Math.abs(durationDifference)} days ahead`}
+                  </p>
+                )}
+
+                <div className="space-y-5">
                   <div>
-                    <div className="mb-1.5 flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400">
+                    <div className="mb-2 flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400">
                       <span>Planned</span>
                       <span>
                         {stats?.plannedDurationDays !== null &&
@@ -974,7 +1261,7 @@ export default function DashboardPage() {
                           : "—"}
                       </span>
                     </div>
-                    <div className="h-3 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+                    <div className="h-4 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
                       <div
                         className="h-full rounded-full bg-blue-500 transition-all duration-500 dark:bg-blue-400"
                         style={{
@@ -985,7 +1272,7 @@ export default function DashboardPage() {
                   </div>
 
                   <div>
-                    <div className="mb-1.5 flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400">
+                    <div className="mb-2 flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400">
                       <span>Projected</span>
                       <span>
                         {stats?.projectedDurationDays !== null &&
@@ -994,7 +1281,7 @@ export default function DashboardPage() {
                           : "—"}
                       </span>
                     </div>
-                    <div className="h-3 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+                    <div className="h-4 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
                       <div
                         className={`h-full rounded-full transition-all duration-500 ${
                           projectedDurationLonger
