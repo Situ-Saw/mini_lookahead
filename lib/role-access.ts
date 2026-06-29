@@ -6,6 +6,7 @@ export const ROLE_ACCESS = {
   lookahead: ["admin", "planner", "site_engineer", "viewer"],
   activities: ["admin", "planner", "site_engineer", "viewer"],
   dashboard: ["admin", "planner", "site_engineer", "viewer"],
+  team: ["admin", "planner"],
 } as const;
 
 export type RoleAccessKey = keyof typeof ROLE_ACCESS;

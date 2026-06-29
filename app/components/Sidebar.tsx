@@ -13,6 +13,7 @@ import {
   Menu,
   Shield,
   Upload,
+  Users,
   X,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
@@ -62,6 +63,12 @@ const NAV_ITEMS: NavItem[] = [
     href: "/constraints",
     icon: AlertTriangle,
     accessKey: "constraints",
+  },
+  {
+    label: "Team",
+    href: "/team",
+    icon: Users,
+    accessKey: "team",
   },
 ];
 
