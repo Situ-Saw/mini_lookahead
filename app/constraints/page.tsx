@@ -29,6 +29,8 @@ type Constraint = {
   status: string;
   target_removal_date: string | null;
   raised_by: string | null;
+  assigned_to: string | null;
+  assigned_to_name: string | null;
   remarks: string | null;
   created_at: string;
   updated_at: string;
@@ -41,6 +43,7 @@ type ConstraintFormState = {
   status: ConstraintStatus;
   target_removal_date: string;
   raised_by: string;
+  assigned_to: string;
   remarks: string;
 };
 
@@ -51,7 +54,14 @@ const EMPTY_FORM: ConstraintFormState = {
   status: "Open",
   target_removal_date: "",
   raised_by: "",
+  assigned_to: "",
   remarks: "",
+};
+
+type ProjectMember = {
+  user_id: string;
+  name: string;
+  role: string;
 };
 
 type ActivityOption = {
@@ -107,6 +117,7 @@ function constraintToForm(constraint: Constraint): ConstraintFormState {
     status: constraint.status === "Closed" ? "Closed" : "Open",
     target_removal_date: constraint.target_removal_date?.split("T")[0] ?? "",
     raised_by: constraint.raised_by ?? "",
+    assigned_to: constraint.assigned_to ?? "",
     remarks: constraint.remarks ?? "",
   };
 }
@@ -119,7 +130,57 @@ function formToPayload(form: ConstraintFormState) {
     status: form.status,
     target_removal_date: form.target_removal_date || null,
     raised_by: form.raised_by.trim() || null,
+    assigned_to: form.assigned_to || null,
     remarks: form.remarks.trim() || null,
+  };
+}
+
+function normalizeConstraint(
+  row: Record<string, unknown>,
+  nameMap: Record<string, string> = {},
+): Constraint | null {
+  if (typeof row.id !== "string") {
+    return null;
+  }
+
+  const assignedTo =
+    typeof row.assigned_to === "string" ? row.assigned_to : null;
+
+  return {
+    id: row.id,
+    activity_id:
+      typeof row.activity_id === "string" ? row.activity_id : null,
+    constraint_type: String(row.constraint_type ?? ""),
+    description: String(row.description ?? ""),
+    status: String(row.status ?? "Open"),
+    target_removal_date:
+      typeof row.target_removal_date === "string"
+        ? row.target_removal_date
+        : null,
+    raised_by: typeof row.raised_by === "string" ? row.raised_by : null,
+    assigned_to: assignedTo,
+    assigned_to_name: assignedTo ? (nameMap[assignedTo] ?? "Unknown") : null,
+    remarks: typeof row.remarks === "string" ? row.remarks : null,
+    created_at: String(row.created_at ?? ""),
+    updated_at: String(row.updated_at ?? ""),
+  };
+}
+
+function withAssigneeName(
+  constraint: Constraint,
+  members: ProjectMember[],
+): Constraint {
+  if (!constraint.assigned_to) {
+    return { ...constraint, assigned_to_name: null };
+  }
+
+  const member = members.find(
+    (entry) => entry.user_id === constraint.assigned_to,
+  );
+
+  return {
+    ...constraint,
+    assigned_to_name: member?.name ?? "Unknown",
   };
 }
 
@@ -378,6 +439,7 @@ function ConstraintModal({
   saveError,
   editingConstraint,
   projectId,
+  projectMembers,
   onChange,
   onCancel,
   onSave,
@@ -388,6 +450,7 @@ function ConstraintModal({
   saveError: string | null;
   editingConstraint: Constraint | null;
   projectId: string;
+  projectMembers: ProjectMember[];
   onChange: (updates: Partial<ConstraintFormState>) => void;
   onCancel: () => void;
   onSave: () => void;
@@ -522,6 +585,34 @@ function ConstraintModal({
 
           <div>
             <label
+              htmlFor="constraint-assigned-to"
+              className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+            >
+              Assigned To
+              <span className="ml-1 text-xs font-normal text-zinc-500 dark:text-zinc-400">
+                (responsible for clearing)
+              </span>
+            </label>
+            <select
+              id="constraint-assigned-to"
+              value={form.assigned_to}
+              disabled={isSaving}
+              onChange={(event) =>
+                onChange({ assigned_to: event.target.value })
+              }
+              className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+            >
+              <option value="">Unassigned</option>
+              {projectMembers.map((member) => (
+                <option key={member.user_id} value={member.user_id}>
+                  {member.name} ({member.role.replace("_", " ")})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label
               htmlFor="constraint-raised-by"
               className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
             >
@@ -625,6 +716,7 @@ export default function ConstraintsPage() {
   const [rowActionId, setRowActionId] = useState<string | null>(null);
   const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
   const [currentUserName, setCurrentUserName] = useState("");
+  const [projectMembers, setProjectMembers] = useState<ProjectMember[]>([]);
 
   useEffect(() => {
     document.title = "Constraint Register";
@@ -686,10 +778,46 @@ export default function ConstraintsPage() {
     if (error) {
       setFetchError(error.message);
       setConstraints([]);
-    } else {
-      setConstraints((data ?? []) as Constraint[]);
+      setIsLoading(false);
+      return;
     }
 
+    const rows = data ?? [];
+    const assignedUserIds = [
+      ...new Set(
+        rows
+          .map((row) => row.assigned_to)
+          .filter((userId): userId is string => typeof userId === "string"),
+      ),
+    ];
+
+    const nameMap: Record<string, string> = {};
+
+    if (assignedUserIds.length > 0) {
+      const { data: profiles, error: profilesError } = await supabase
+        .from("profiles")
+        .select("id, name")
+        .in("id", assignedUserIds);
+
+      if (profilesError) {
+        console.error(
+          "Failed to load assignee profiles:",
+          profilesError.message,
+        );
+      } else {
+        for (const profile of profiles ?? []) {
+          if (typeof profile.id === "string") {
+            nameMap[profile.id] = String(profile.name ?? "Unknown");
+          }
+        }
+      }
+    }
+
+    const normalizedConstraints = rows
+      .map((row) => normalizeConstraint(row as Record<string, unknown>, nameMap))
+      .filter((row): row is Constraint => row !== null);
+
+    setConstraints(normalizedConstraints);
     setIsLoading(false);
   }, []);
 
@@ -697,6 +825,94 @@ export default function ConstraintsPage() {
     if (!activeProject) return;
     void loadConstraints(activeProject.id);
   }, [loadConstraints, activeProject]);
+
+  useEffect(() => {
+    if (!activeProject) {
+      setProjectMembers([]);
+      return;
+    }
+
+    const projectId = activeProject.id;
+    let cancelled = false;
+
+    async function loadProjectMembers() {
+      const { data: members, error: membersError } = await supabase
+        .from("project_members")
+        .select("user_id, role")
+        .eq("project_id", projectId)
+        .in("role", ["admin", "planner", "site_engineer"])
+        .order("user_id");
+
+      if (cancelled) {
+        return;
+      }
+
+      if (membersError) {
+        console.error("Failed to load project members:", membersError.message);
+        setProjectMembers([]);
+        return;
+      }
+
+      const memberRows = members ?? [];
+      const userIds = memberRows
+        .map((member) => member.user_id)
+        .filter((userId): userId is string => typeof userId === "string");
+
+      if (userIds.length === 0) {
+        setProjectMembers([]);
+        return;
+      }
+
+      const { data: profiles, error: profilesError } = await supabase
+        .from("profiles")
+        .select("id, name")
+        .in("id", userIds)
+        .order("name");
+
+      if (cancelled) {
+        return;
+      }
+
+      if (profilesError) {
+        console.error(
+          "Failed to load project member profiles:",
+          profilesError.message,
+        );
+        setProjectMembers([]);
+        return;
+      }
+
+      const nameByUserId = new Map(
+        (profiles ?? []).map((profile) => [
+          String(profile.id),
+          String(profile.name ?? "Unknown"),
+        ]),
+      );
+
+      const normalizedMembers = memberRows
+        .map((member) => {
+          if (typeof member.user_id !== "string") {
+            return null;
+          }
+
+          return {
+            user_id: member.user_id,
+            name: nameByUserId.get(member.user_id) ?? "Unknown",
+            role: String(member.role ?? ""),
+          };
+        })
+        .filter((member): member is ProjectMember => member !== null)
+        .sort((left, right) => left.name.localeCompare(right.name));
+
+      setProjectMembers(normalizedMembers);
+    }
+
+    void loadProjectMembers();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeProject]);
 
   const totalConstraints = constraints.length;
   const openConstraints = constraints.filter((c) => c.status === "Open").length;
@@ -783,7 +999,16 @@ export default function ConstraintsPage() {
         return;
       }
 
-      setConstraints((current) => [data as Constraint, ...current]);
+      const saved = normalizeConstraint(
+        data as Record<string, unknown>,
+        {},
+      );
+      if (saved) {
+        setConstraints((current) => [
+          withAssigneeName(saved, projectMembers),
+          ...current,
+        ]);
+      }
     } else if (editingConstraint) {
       const { data, error } = await supabase
         .from("constraints")
@@ -798,20 +1023,26 @@ export default function ConstraintsPage() {
         return;
       }
 
-      setConstraints((current) =>
-        current.map((constraint) =>
-          constraint.id === editingConstraint.id
-            ? (data as Constraint)
-            : constraint,
-        ),
+      const saved = normalizeConstraint(
+        data as Record<string, unknown>,
+        {},
       );
+      if (saved) {
+        setConstraints((current) =>
+          current.map((constraint) =>
+            constraint.id === editingConstraint.id
+              ? withAssigneeName(saved, projectMembers)
+              : constraint,
+          ),
+        );
+      }
     }
 
     setIsSaving(false);
     setIsModalOpen(false);
     setEditingConstraint(null);
     setForm(EMPTY_FORM);
-  }, [activeProject, editingConstraint, form, modalMode]);
+  }, [activeProject, editingConstraint, form, modalMode, projectMembers]);
 
   const handleCloseConstraint = async (constraint: Constraint) => {
     setRowActionId(constraint.id);
@@ -1043,6 +1274,9 @@ export default function ConstraintsPage() {
                   Raised By
                 </th>
                 <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+                  Assigned To
+                </th>
+                <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
                   Status
                 </th>
                 <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
@@ -1083,6 +1317,17 @@ export default function ConstraintsPage() {
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 text-zinc-700 dark:text-zinc-300">
                       {formatCell(constraint.raised_by)}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-zinc-700 dark:text-zinc-300">
+                      {constraint.assigned_to_name ? (
+                        <span className="inline-flex items-center rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 dark:bg-blue-950/30 dark:text-blue-300">
+                          {constraint.assigned_to_name}
+                        </span>
+                      ) : (
+                        <span className="text-zinc-400 dark:text-zinc-500">
+                          —
+                        </span>
+                      )}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3">
                       <StatusBadge status={constraint.status} />
@@ -1221,6 +1466,7 @@ export default function ConstraintsPage() {
           saveError={saveError}
           editingConstraint={editingConstraint}
           projectId={activeProject.id}
+          projectMembers={projectMembers}
           onChange={handleFormChange}
           onCancel={closeModal}
           onSave={() => void handleSave()}
