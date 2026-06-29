@@ -22,6 +22,22 @@ import { hasRoleAccess } from "@/lib/role-access";
 const SESSION_LENGTH_DAYS = 14;
 const MS_PER_DAY = 86_400_000;
 
+const VARIANCE_REASONS = [
+  "Material",
+  "Design/RFI",
+  "Labour",
+  "Equipment",
+  "Approval",
+  "Weather",
+  "Other",
+] as const;
+
+type VarianceReason = (typeof VARIANCE_REASONS)[number];
+
+// SQL to run in Supabase:
+// ALTER TABLE session_activities
+// ADD COLUMN IF NOT EXISTS variance_reason text;
+
 type PlanningSession = {
   id: string;
   start_date: string;
@@ -76,6 +92,7 @@ function normalizeSessionActivityRow(
 type SessionActivitySummary = {
   id: string;
   was_completed: boolean;
+  variance_reason: string | null;
 };
 
 type ClosedSession = PlanningSession & {
@@ -362,6 +379,46 @@ function getStatusCategory(status: string | null): StatusCategory {
   return "other";
 }
 
+function isIncompleteSessionActivity(row: SessionActivityRow): boolean {
+  if (row.was_completed) {
+    return false;
+  }
+
+  const status = row.activities?.status ?? null;
+  if (status === "Completed") {
+    return false;
+  }
+
+  return getStatusCategory(status) !== "completed";
+}
+
+function formatVarianceBreakdown(
+  activities: SessionActivitySummary[],
+): Array<{ reason: string; count: number }> {
+  const hasIncomplete = activities.some((row) => !row.was_completed);
+  if (!hasIncomplete) {
+    return [];
+  }
+
+  const counts = new Map<string, number>();
+
+  for (const row of activities) {
+    if (row.was_completed || !row.variance_reason) {
+      continue;
+    }
+
+    counts.set(
+      row.variance_reason,
+      (counts.get(row.variance_reason) ?? 0) + 1,
+    );
+  }
+
+  return Array.from(counts.entries()).map(([reason, count]) => ({
+    reason,
+    count,
+  }));
+}
+
 function getStatusLabel(status: string | null): string {
   if (!status) return "Unknown";
 
@@ -437,6 +494,142 @@ function PpcChartTooltip({ active, payload }: ChartTooltipProps) {
   );
 }
 
+function VarianceCloseModal({
+  incompleteActivities,
+  varianceReasons,
+  otherReasons,
+  isClosing,
+  errorMessage,
+  allReasonsSelected,
+  onReasonChange,
+  onOtherReasonChange,
+  onConfirm,
+  onCancel,
+}: {
+  incompleteActivities: SessionActivityRow[];
+  varianceReasons: Record<string, VarianceReason | "">;
+  otherReasons: Record<string, string>;
+  isClosing: boolean;
+  errorMessage: string | null;
+  allReasonsSelected: boolean;
+  onReasonChange: (activityId: string, reason: VarianceReason) => void;
+  onOtherReasonChange: (activityId: string, text: string) => void;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !isClosing) {
+        onCancel();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isClosing, onCancel]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <button
+        type="button"
+        aria-label="Close dialog"
+        className="absolute inset-0 bg-black/50"
+        onClick={isClosing ? undefined : onCancel}
+        disabled={isClosing}
+      />
+
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="variance-modal-title"
+        className="relative z-10 max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border border-zinc-200 bg-white p-6 shadow-xl dark:border-zinc-800 dark:bg-zinc-950"
+      >
+        <h2
+          id="variance-modal-title"
+          className="text-lg font-semibold text-zinc-900 dark:text-zinc-100"
+        >
+          Close Session — Capture Variance Reasons
+        </h2>
+        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+          The following activities were not completed. Select a reason for each
+          before closing.
+        </p>
+
+        <div className="mt-5 space-y-4">
+          {incompleteActivities.map((row) => (
+            <div
+              key={row.id}
+              className="rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900/40"
+            >
+              <p className="font-mono text-xs text-zinc-500 dark:text-zinc-400">
+                {row.activity_id}
+              </p>
+              <p className="mt-1 text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                {row.activities?.activity_name ?? "—"}
+              </p>
+              <select
+                value={varianceReasons[row.id] ?? ""}
+                disabled={isClosing}
+                onChange={(event) =>
+                  onReasonChange(row.id, event.target.value as VarianceReason)
+                }
+                className="mt-3 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+              >
+                <option value="" disabled>
+                  Select reason...
+                </option>
+                {VARIANCE_REASONS.map((reason) => (
+                  <option key={reason} value={reason}>
+                    {reason}
+                  </option>
+                ))}
+              </select>
+              {varianceReasons[row.id] === "Other" && (
+                <input
+                  type="text"
+                  value={otherReasons[row.id] ?? ""}
+                  disabled={isClosing}
+                  required
+                  placeholder="Describe the reason..."
+                  onChange={(event) =>
+                    onOtherReasonChange(row.id, event.target.value)
+                  }
+                  className="mt-2 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+                />
+              )}
+            </div>
+          ))}
+        </div>
+
+        {errorMessage && (
+          <p className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
+            {errorMessage}
+          </p>
+        )}
+
+        <div className="mt-6 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => void onConfirm()}
+            disabled={isClosing || !allReasonsSelected}
+            className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+          >
+            {isClosing ? "Closing..." : "Confirm Close"}
+          </button>
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={isClosing}
+            className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function PlanningPage() {
   const router = useRouter();
   const { role, isRoleLoading } = useProjectRole();
@@ -465,6 +658,17 @@ export default function PlanningPage() {
   const [actionActivityId, setActionActivityId] = useState<string | null>(null);
   const [isClosing, setIsClosing] = useState(false);
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
+  const [showVarianceModal, setShowVarianceModal] = useState(false);
+  const [incompleteActivities, setIncompleteActivities] = useState<
+    SessionActivityRow[]
+  >([]);
+  const [varianceReasons, setVarianceReasons] = useState<
+    Record<string, VarianceReason | "">
+  >({});
+  const [otherReasons, setOtherReasons] = useState<Record<string, string>>({});
+  const [varianceModalError, setVarianceModalError] = useState<string | null>(
+    null,
+  );
 
   const [engineers, setEngineers] = useState<ProjectEngineer[]>([]);
   const [assignmentMap, setAssignmentMap] = useState<
@@ -573,7 +777,8 @@ export default function PlanningPage() {
           closed_at,
           session_activities (
             id,
-            was_completed
+            was_completed,
+            variance_reason
           )
         `,
         )
@@ -729,16 +934,24 @@ export default function PlanningPage() {
     return ppcScore;
   }, []);
 
-  const allActivitiesCompleted = useMemo(
-    () =>
-      sessionActivities.length > 0 &&
-      sessionActivities.every(
-        (row) =>
-          row.was_completed ||
-          (row.activities?.status?.toLowerCase().includes("complete") ?? false),
-      ),
-    [sessionActivities],
-  );
+  const allVarianceReasonsSelected = useMemo(() => {
+    if (incompleteActivities.length === 0) {
+      return false;
+    }
+
+    return incompleteActivities.every((row) => {
+      const reason = varianceReasons[row.id];
+      if (reason === "" || reason === undefined) {
+        return false;
+      }
+
+      if (reason === "Other") {
+        return (otherReasons[row.id] ?? "").trim().length > 0;
+      }
+
+      return true;
+    });
+  }, [incompleteActivities, varianceReasons, otherReasons]);
 
   const daysRemaining = useMemo(() => {
     if (!activeSession) return 0;
@@ -975,11 +1188,63 @@ export default function PlanningPage() {
     ],
   );
 
-  const handleCloseSession = useCallback(async () => {
-    if (!activeSession || !allActivitiesCompleted) return;
+  const handleCloseSessionClick = useCallback(() => {
+    const incomplete = sessionActivities.filter(isIncompleteSessionActivity);
 
-    setIsClosing(true);
-    setActionError(null);
+    if (incomplete.length === 0) {
+      setShowCloseConfirm(true);
+      return;
+    }
+
+    const initialReasons: Record<string, VarianceReason | ""> = {};
+    for (const row of incomplete) {
+      initialReasons[row.id] = "";
+    }
+
+    setIncompleteActivities(incomplete);
+    setVarianceReasons(initialReasons);
+    setOtherReasons({});
+    setVarianceModalError(null);
+    setShowVarianceModal(true);
+  }, [sessionActivities]);
+
+  const handleCancelVarianceModal = useCallback(() => {
+    if (isClosing) {
+      return;
+    }
+
+    setShowVarianceModal(false);
+    setIncompleteActivities([]);
+    setVarianceReasons({});
+    setOtherReasons({});
+    setVarianceModalError(null);
+  }, [isClosing]);
+
+  const handleVarianceReasonChange = useCallback(
+    (activityId: string, reason: VarianceReason) => {
+      setVarianceReasons((current) => ({ ...current, [activityId]: reason }));
+      if (reason !== "Other") {
+        setOtherReasons((current) => {
+          const next = { ...current };
+          delete next[activityId];
+          return next;
+        });
+      }
+    },
+    [],
+  );
+
+  const handleOtherReasonChange = useCallback(
+    (activityId: string, text: string) => {
+      setOtherReasons((current) => ({ ...current, [activityId]: text }));
+    },
+    [],
+  );
+
+  const closeActiveSession = useCallback(async () => {
+    if (!activeSession) {
+      return false;
+    }
 
     const ppcScore =
       activeSession.ppc_score !== null && activeSession.ppc_score !== undefined
@@ -997,7 +1262,71 @@ export default function PlanningPage() {
       .eq("id", activeSession.id);
 
     if (error) {
-      setActionError(error.message);
+      return error.message;
+    }
+
+    return null;
+  }, [activeSession, livePpc]);
+
+  const handleConfirmVarianceClose = useCallback(async () => {
+    if (!activeSession || !allVarianceReasonsSelected) {
+      return;
+    }
+
+    setIsClosing(true);
+    setVarianceModalError(null);
+
+    for (const row of incompleteActivities) {
+      const reason = varianceReasons[row.id];
+      const varianceReason =
+        reason === "Other"
+          ? `Other: ${(otherReasons[row.id] ?? "").trim()}`
+          : reason;
+
+      const { error } = await supabase
+        .from("session_activities")
+        .update({ variance_reason: varianceReason })
+        .eq("id", row.id);
+
+      if (error) {
+        setVarianceModalError(error.message);
+        setIsClosing(false);
+        return;
+      }
+    }
+
+    const closeError = await closeActiveSession();
+    if (closeError) {
+      setVarianceModalError(closeError);
+      setIsClosing(false);
+      return;
+    }
+
+    setShowVarianceModal(false);
+    setIncompleteActivities([]);
+    setVarianceReasons({});
+    setOtherReasons({});
+    setIsClosing(false);
+    await loadData();
+  }, [
+    activeSession,
+    allVarianceReasonsSelected,
+    closeActiveSession,
+    incompleteActivities,
+    loadData,
+    otherReasons,
+    varianceReasons,
+  ]);
+
+  const handleCloseSession = useCallback(async () => {
+    if (!activeSession) return;
+
+    setIsClosing(true);
+    setActionError(null);
+
+    const closeError = await closeActiveSession();
+    if (closeError) {
+      setActionError(closeError);
       setIsClosing(false);
       setShowCloseConfirm(false);
       return;
@@ -1006,7 +1335,7 @@ export default function PlanningPage() {
     setShowCloseConfirm(false);
     setIsClosing(false);
     await loadData();
-  }, [activeSession, allActivitiesCompleted, livePpc, loadData]);
+  }, [activeSession, closeActiveSession, loadData]);
 
   const handleStartSession = useCallback(async () => {
     if (!activeProject || activeSession || previewActivities.length === 0) return;
@@ -1458,22 +1787,12 @@ export default function PlanningPage() {
                 <div className="relative inline-block">
                   <button
                     type="button"
-                    onClick={() => setShowCloseConfirm(true)}
-                    disabled={!allActivitiesCompleted || isClosing}
-                    title={
-                      !allActivitiesCompleted
-                        ? "All activities must be completed before closing"
-                        : undefined
-                    }
+                    onClick={handleCloseSessionClick}
+                    disabled={isClosing}
                     className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-blue-500 dark:hover:bg-blue-400"
                   >
                     Close Session
                   </button>
-                  {!allActivitiesCompleted && (
-                    <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
-                      All activities must be completed before closing
-                    </p>
-                  )}
                 </div>
               )}
             </div>
@@ -1630,6 +1949,9 @@ export default function PlanningPage() {
                     <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
                       Closed Date
                     </th>
+                    <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+                      Variance Reasons
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-200 bg-white dark:divide-zinc-800 dark:bg-zinc-950">
@@ -1644,6 +1966,7 @@ export default function PlanningPage() {
                       session.ppc_score !== undefined
                         ? Number(session.ppc_score)
                         : calculatePpc(completed, total);
+                    const varianceBreakdown = formatVarianceBreakdown(activities);
 
                     return (
                       <tr key={session.id} className="align-top">
@@ -1665,6 +1988,24 @@ export default function PlanningPage() {
                         <td className="whitespace-nowrap px-4 py-3 text-zinc-700 dark:text-zinc-300">
                           {formatDateTime(session.closed_at)}
                         </td>
+                        <td className="px-4 py-3">
+                          {varianceBreakdown.length === 0 ? (
+                            <span className="text-zinc-400 dark:text-zinc-500">
+                              —
+                            </span>
+                          ) : (
+                            <div className="flex flex-wrap gap-1.5">
+                              {varianceBreakdown.map((entry) => (
+                                <span
+                                  key={entry.reason}
+                                  className="inline-flex items-center rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-700 ring-1 ring-inset ring-zinc-200 dark:bg-zinc-800 dark:text-zinc-200 dark:ring-zinc-700"
+                                >
+                                  {entry.reason} ×{entry.count}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </td>
                       </tr>
                     );
                   })}
@@ -1674,6 +2015,21 @@ export default function PlanningPage() {
           </>
         )}
       </section>
+
+      {showVarianceModal && (
+        <VarianceCloseModal
+          incompleteActivities={incompleteActivities}
+          varianceReasons={varianceReasons}
+          otherReasons={otherReasons}
+          isClosing={isClosing}
+          errorMessage={varianceModalError}
+          allReasonsSelected={allVarianceReasonsSelected}
+          onReasonChange={handleVarianceReasonChange}
+          onOtherReasonChange={handleOtherReasonChange}
+          onConfirm={() => void handleConfirmVarianceClose()}
+          onCancel={handleCancelVarianceModal}
+        />
+      )}
     </main>
   );
 }
