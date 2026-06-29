@@ -454,7 +454,9 @@ function KpiCard({
   const rendered = displayValue ?? value?.toLocaleString() ?? "—";
   const cardGradient = criticalBackground
     ? "bg-gradient-to-br from-red-50 to-white dark:from-red-950/40 dark:to-zinc-950"
-    : styles.gradient;
+    : showLeftAccent && variant === "red"
+      ? "bg-white dark:bg-zinc-950"
+      : styles.gradient;
 
   return (
     <div
@@ -839,6 +841,51 @@ export default function DashboardPage() {
   const showBaselineBanner =
     !isLoading && stats !== null && stats.baselineCount === 0;
 
+  const hasDashboardData = !isLoading && stats !== null;
+  const healthStatus = getHealthStatus(ppc, hasDashboardData);
+
+  const isDelayCritical = useMemo(() => {
+    if (!stats || stats.totalActivities === 0) return false;
+    return stats.delayedActivities > stats.totalActivities * 0.3;
+  }, [stats]);
+
+  const projectedEndStatusBadge: StatusBadge = useMemo(() => {
+    if (projectedEndVariant === "red") {
+      return { label: "DELAYED", className: STATUS_BADGE_STYLES.red };
+    }
+    if (projectedEndVariant === "green") {
+      return { label: "AHEAD", className: STATUS_BADGE_STYLES.emerald };
+    }
+    return { label: "ON TRACK", className: STATUS_BADGE_STYLES.zinc };
+  }, [projectedEndVariant]);
+
+  const netDelaySchedulePill: StatusBadge | undefined = useMemo(() => {
+    const net = stats?.netDelayDays ?? null;
+    if (net === null) return undefined;
+    if (net > 0) {
+      return {
+        label: "OVER SCHEDULE",
+        className: STATUS_BADGE_STYLES.red,
+      };
+    }
+    if (net < 0) {
+      return {
+        label: "AHEAD OF SCHEDULE",
+        className: STATUS_BADGE_STYLES.emerald,
+      };
+    }
+    return {
+      label: "ON SCHEDULE",
+      className: STATUS_BADGE_STYLES.zinc,
+    };
+  }, [stats?.netDelayDays]);
+
+  const hasDurationData =
+    stats?.plannedDurationDays !== null &&
+    stats?.plannedDurationDays !== undefined &&
+    stats?.projectedDurationDays !== null &&
+    stats?.projectedDurationDays !== undefined;
+
   if (isProjectLoading) {
     return (
       <main className="flex min-h-[50vh] items-center justify-center bg-zinc-50 dark:bg-zinc-950">
@@ -901,42 +948,66 @@ export default function DashboardPage() {
           </div>
         )}
 
-        <div className="rounded-2xl bg-zinc-900 px-8 py-8 shadow-xl dark:bg-zinc-800">
+        <div className="rounded-2xl border border-zinc-200 bg-white px-8 py-8 shadow-md dark:border-zinc-800 dark:bg-zinc-950">
           <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-widest text-zinc-400">
-                Construction Planning
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
+                Construction Planning System
               </p>
-              <h1 className="mt-2 text-3xl font-bold tracking-tight text-white sm:text-4xl">
-                Project Dashboard
+              <h1 className="mt-2 text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100 sm:text-3xl">
+                {activeProject.name}
               </h1>
               <div className="mt-3 flex flex-wrap items-center gap-2">
-                <span className="rounded-full bg-zinc-700 px-3 py-1 text-xs font-medium text-zinc-300">
+                <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
                   {activeProject.code}
                 </span>
-                <span className="text-sm text-zinc-400">{activeProject.name}</span>
               </div>
+
+              {isLoading || !stats ? (
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <ChipSkeleton />
+                  <ChipSkeleton />
+                  <ChipSkeleton />
+                  <ChipSkeleton />
+                </div>
+              ) : (
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+                    📅 Baseline: {formatDisplayDate(stats.plannedStartDate)}
+                  </span>
+                  <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+                    📊 {stats.totalActivities} Activities
+                  </span>
+                  <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+                    ⚠ {stats.openConstraints} Open Constraints
+                  </span>
+                  <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+                    🕐 Updated:{" "}
+                    {lastUpdated ? formatLastUpdated(lastUpdated) : "—"}
+                  </span>
+                </div>
+              )}
             </div>
 
-            <div className="flex flex-col items-start gap-3 sm:items-end">
+            <div className="flex flex-col items-start gap-2 sm:items-end">
+              <span
+                className={`rounded-full px-4 py-2 text-sm font-bold tracking-wide ${healthStatus.color}`}
+              >
+                ● {healthStatus.label}
+              </span>
               <button
                 type="button"
                 onClick={handleRefresh}
                 disabled={isLoading}
                 aria-label="Refresh dashboard data"
-                className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-2 text-sm font-medium text-zinc-300 transition-colors hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-600"
+                className="inline-flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
               >
                 <RefreshCw
-                  className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`}
+                  className={`h-3.5 w-3.5 ${isLoading ? "animate-spin" : ""}`}
                   aria-hidden="true"
                 />
                 Refresh
               </button>
-              <p className="text-xs text-zinc-500">
-                {lastUpdated
-                  ? `Updated ${formatLastUpdated(lastUpdated)}`
-                  : "Loading..."}
-              </p>
             </div>
           </div>
         </div>
@@ -948,7 +1019,7 @@ export default function DashboardPage() {
         )}
 
         <section>
-          <SectionHeader title="Activity Status" />
+          <SectionHeader title="Activity Status" icon={ClipboardList} />
           {isLoading ? (
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               <CardSkeleton />
@@ -971,6 +1042,12 @@ export default function DashboardPage() {
                 isLoading={isLoading}
                 variant="green"
                 icon={CheckCircle2}
+                trendText={
+                  (stats?.completedActivities ?? 0) > 0
+                    ? `↑ ${stats?.completedActivities ?? 0} done`
+                    : undefined
+                }
+                trendColor="text-emerald-600 dark:text-emerald-400"
               />
               <KpiCard
                 label="In Progress"
@@ -978,6 +1055,12 @@ export default function DashboardPage() {
                 isLoading={isLoading}
                 variant="blue"
                 icon={Clock}
+                trendText={
+                  (stats?.inProgressActivities ?? 0) > 0
+                    ? `● ${stats?.inProgressActivities ?? 0} active`
+                    : undefined
+                }
+                trendColor="text-blue-600 dark:text-blue-400"
               />
               <KpiCard
                 label="Not Started"
@@ -985,13 +1068,15 @@ export default function DashboardPage() {
                 isLoading={isLoading}
                 variant="gray"
                 icon={Circle}
+                trendText={`${stats?.notStartedActivities ?? 0} pending`}
+                trendColor="text-zinc-500 dark:text-zinc-400"
               />
             </div>
           )}
         </section>
 
         <section>
-          <SectionHeader title="Delay Analysis" />
+          <SectionHeader title="Delay Analysis" icon={AlertTriangle} />
           {isLoading ? (
             <div className="grid gap-4 sm:grid-cols-3">
               <CardSkeleton />
@@ -1001,12 +1086,24 @@ export default function DashboardPage() {
           ) : (
             <div className="grid gap-4 sm:grid-cols-3">
               <KpiCard
-                label="Delayed Activities"
+                label="Activities Over Schedule"
                 value={stats?.delayedActivities ?? 0}
                 isLoading={isLoading}
                 variant="red"
                 icon={AlertTriangle}
                 showLeftAccent
+                criticalBackground={isDelayCritical}
+                valueClassName="text-red-600 dark:text-red-400"
+                trendText={
+                  (stats?.delayedActivities ?? 0) > 0
+                    ? `↑ ${stats?.delayedActivities ?? 0} over schedule`
+                    : "✓ None delayed"
+                }
+                trendColor={
+                  (stats?.delayedActivities ?? 0) > 0
+                    ? "text-red-600 dark:text-red-400"
+                    : "text-emerald-600 dark:text-emerald-400"
+                }
               />
               <KpiCard
                 label="Average Delay"
@@ -1029,7 +1126,7 @@ export default function DashboardPage() {
         </section>
 
         <section>
-          <SectionHeader title="Constraints" />
+          <SectionHeader title="Constraints" icon={ShieldAlert} />
           {isLoading ? (
             <div className="grid gap-4 sm:grid-cols-3">
               <CardSkeleton />
@@ -1063,23 +1160,32 @@ export default function DashboardPage() {
               </div>
 
               {(stats?.totalConstraints ?? 0) > 0 && (
-                <div className="mt-4 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
-                  <div className="mb-2 flex justify-between text-xs text-zinc-500 dark:text-zinc-400">
-                    <span>Open</span>
-                    <span>Closed</span>
+                <div className="mt-4 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+                  <div className="mb-3 flex items-center justify-between">
+                    <p className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+                      Constraint Resolution Progress
+                    </p>
+                    <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
+                      {Math.round(
+                        ((stats?.closedConstraints ?? 0) /
+                          (stats?.totalConstraints ?? 1)) *
+                          100,
+                      )}
+                      % resolved
+                    </p>
                   </div>
-                  <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+                  <div className="h-3 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
                     <div
-                      className="h-full rounded-full bg-emerald-500 transition-all duration-500 dark:bg-emerald-400"
+                      className="h-full rounded-full bg-emerald-500 transition-all duration-700 dark:bg-emerald-400"
                       style={{
                         width: `${((stats?.closedConstraints ?? 0) / (stats?.totalConstraints ?? 1)) * 100}%`,
                       }}
                     />
                   </div>
-                  <p className="mt-2 text-right text-xs text-zinc-500 dark:text-zinc-400">
-                    {stats?.closedConstraints ?? 0} of {stats?.totalConstraints ?? 0}{" "}
-                    resolved
-                  </p>
+                  <div className="mt-2 flex justify-between text-xs text-zinc-500 dark:text-zinc-400">
+                    <span>● Open: {stats?.openConstraints ?? 0}</span>
+                    <span>● Closed: {stats?.closedConstraints ?? 0}</span>
+                  </div>
                 </div>
               )}
             </>
@@ -1087,7 +1193,7 @@ export default function DashboardPage() {
         </section>
 
         <section>
-          <SectionHeader title="Project Completion" />
+          <SectionHeader title="Project Completion" icon={TrendingUp} />
           <div
             className={`rounded-2xl border border-zinc-100 bg-gradient-to-br p-6 shadow-md dark:border-zinc-800 sm:p-8 ${ppcColors.gradient}`}
           >
@@ -1150,11 +1256,49 @@ export default function DashboardPage() {
                 </div>
               </div>
             )}
+
+            {!isLoading && (
+              <div className="mt-6 grid grid-cols-3 gap-4 border-t border-zinc-200 pt-6 dark:border-zinc-800">
+                <div className="text-center">
+                  <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400">
+                    {stats?.completedActivities ?? 0}
+                  </p>
+                  <p className="mt-1 text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                    Completed
+                  </p>
+                </div>
+
+                <div className="border-x border-zinc-200 text-center dark:border-zinc-800">
+                  <p className="text-2xl font-black text-blue-600 dark:text-blue-400">
+                    {(stats?.totalActivities ?? 0) -
+                      (stats?.completedActivities ?? 0)}
+                  </p>
+                  <p className="mt-1 text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                    Remaining
+                  </p>
+                </div>
+
+                <div className="text-center">
+                  <p
+                    className={`text-2xl font-black ${
+                      projectedEndVariant === "red"
+                        ? "text-red-600 dark:text-red-400"
+                        : "text-emerald-600 dark:text-emerald-400"
+                    }`}
+                  >
+                    {formatDisplayDate(stats?.projectedEndDate ?? null)}
+                  </p>
+                  <p className="mt-1 text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                    Forecast End
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
         </section>
 
         <section>
-          <SectionHeader title="Project Timeline" />
+          <SectionHeader title="Project Timeline" icon={Calendar} />
           {isLoading ? (
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               <CardSkeleton />
@@ -1184,6 +1328,7 @@ export default function DashboardPage() {
                 isLoading={isLoading}
                 variant={projectedEndVariant}
                 icon={Calendar}
+                statusBadge={projectedEndStatusBadge}
               />
               <TimelineCard
                 label="Net Delay Impact"
@@ -1193,6 +1338,7 @@ export default function DashboardPage() {
                 variant={netDelayDisplay.variant}
                 icon={Timer}
                 highlight={netDelayHighlight}
+                schedulePill={netDelaySchedulePill}
               />
             </div>
           )}
@@ -1252,6 +1398,13 @@ export default function DashboardPage() {
 
                 <div className="space-y-5">
                   <div>
+                    {hasDurationData && (
+                      <div className="mb-2">
+                        <span className="rounded bg-zinc-200 px-1.5 py-0.5 text-xs font-bold text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300">
+                          BASELINE
+                        </span>
+                      </div>
+                    )}
                     <div className="mb-2 flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400">
                       <span>Planned</span>
                       <span>
@@ -1272,6 +1425,25 @@ export default function DashboardPage() {
                   </div>
 
                   <div>
+                    {hasDurationData && (
+                      <div className="mb-2">
+                        {projectedDurationLonger ? (
+                          <span className="rounded bg-red-100 px-1.5 py-0.5 text-xs font-bold text-red-700 dark:bg-red-950/40 dark:text-red-400">
+                            DELAYED +
+                            {(stats?.projectedDurationDays ?? 0) -
+                              (stats?.plannedDurationDays ?? 0)}{" "}
+                            days
+                          </span>
+                        ) : (
+                          <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-xs font-bold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400">
+                            AHEAD{" "}
+                            {(stats?.plannedDurationDays ?? 0) -
+                              (stats?.projectedDurationDays ?? 0)}{" "}
+                            days
+                          </span>
+                        )}
+                      </div>
+                    )}
                     <div className="mb-2 flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400">
                       <span>Projected</span>
                       <span>
