@@ -142,5 +142,10 @@ export async function POST(request: Request) {
     );
   }
 
-  return NextResponse.json({ user_id: userId, password, email });
+  return NextResponse.json({
+    user_id: userId,
+    new_user_id: newUserId,
+    password,
+    email,
+  });
 }

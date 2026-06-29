@@ -3,6 +3,9 @@ export const ROLE_ACCESS = {
   planning: ["admin", "planner"],
   constraints: ["admin", "planner", "site_engineer"],
   admin_panel: ["admin"],
+  lookahead: ["admin", "planner", "site_engineer", "viewer"],
+  activities: ["admin", "planner", "site_engineer", "viewer"],
+  dashboard: ["admin", "planner", "site_engineer", "viewer"],
 } as const;
 
 export type RoleAccessKey = keyof typeof ROLE_ACCESS;

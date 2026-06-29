@@ -31,11 +31,13 @@ const NAV_ITEMS: NavItem[] = [
     label: "Dashboard",
     href: "/dashboard",
     icon: LayoutDashboard,
+    accessKey: "dashboard",
   },
   {
     label: "Activities",
     href: "/activities",
     icon: ClipboardList,
+    accessKey: "activities",
   },
   {
     label: "Import Excel",
@@ -47,6 +49,7 @@ const NAV_ITEMS: NavItem[] = [
     label: "Look Ahead",
     href: "/lookahead",
     icon: Calendar,
+    accessKey: "lookahead",
   },
   {
     label: "Planning",

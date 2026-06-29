@@ -51,8 +51,14 @@ type ProjectMemberRow = {
 
 type CreatedUserCredentials = {
   user_id: string;
+  new_user_id: string;
   password: string;
   email: string;
+};
+
+type EngineerOption = {
+  user_id: string;
+  name: string;
 };
 
 const TABS: Array<{ id: TabId; label: string }> = [
@@ -241,6 +247,12 @@ export default function AdminPage() {
   const [createName, setCreateName] = useState("");
   const [createRole, setCreateRole] = useState<AppRole>("site_engineer");
   const [createProjectId, setCreateProjectId] = useState("");
+  const [assignToEngineerId, setAssignToEngineerId] = useState("");
+  const [engineerOptions, setEngineerOptions] = useState<EngineerOption[]>([]);
+  const [isLoadingEngineers, setIsLoadingEngineers] = useState(false);
+  const [createUserWarning, setCreateUserWarning] = useState<string | null>(
+    null,
+  );
   const [isCreatingUser, setIsCreatingUser] = useState(false);
   const [createUserError, setCreateUserError] = useState<string | null>(null);
   const [createdCredentials, setCreatedCredentials] =
@@ -367,10 +379,76 @@ export default function AdminPage() {
     };
   }, [loadAdminData]);
 
+  const loadSiteEngineers = useCallback(async (projectId: string) => {
+    setIsLoadingEngineers(true);
+
+    const supabase = createClient();
+    const { data: members, error: membersError } = await supabase
+      .from("project_members")
+      .select("user_id")
+      .eq("project_id", projectId)
+      .eq("role", "site_engineer");
+
+    if (membersError) {
+      console.error("Failed to load site engineers:", membersError.message);
+      setEngineerOptions([]);
+      setIsLoadingEngineers(false);
+      return;
+    }
+
+    const userIds = (members ?? []).map((member) => member.user_id);
+
+    if (userIds.length === 0) {
+      setEngineerOptions([]);
+      setIsLoadingEngineers(false);
+      return;
+    }
+
+    const { data: profiles, error: profilesError } = await supabase
+      .from("profiles")
+      .select("id, name")
+      .in("id", userIds)
+      .order("name");
+
+    if (profilesError) {
+      console.error("Failed to load engineer profiles:", profilesError.message);
+      setEngineerOptions([]);
+      setIsLoadingEngineers(false);
+      return;
+    }
+
+    setEngineerOptions(
+      (profiles ?? []).map((profile) => ({
+        user_id: profile.id,
+        name: profile.name,
+      })),
+    );
+    setIsLoadingEngineers(false);
+  }, []);
+
+  useEffect(() => {
+    if (createRole !== "viewer" || !createProjectId) {
+      return;
+    }
+
+    void loadSiteEngineers(createProjectId);
+  }, [createRole, createProjectId, loadSiteEngineers]);
+
+  useEffect(() => {
+    if (createRole !== "viewer") {
+      setAssignToEngineerId("");
+    }
+  }, [createRole]);
+
+  useEffect(() => {
+    setAssignToEngineerId("");
+  }, [createProjectId]);
+
   const handleCreateUser = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setCreateUserError(null);
     setCreatedCredentials(null);
+    setCreateUserWarning(null);
     setIsCreatingUser(true);
 
     try {
@@ -393,12 +471,34 @@ export default function AdminPage() {
         return;
       }
 
+      const newUserUuid = payload.new_user_id;
+
+      if (createRole === "viewer" && assignToEngineerId && newUserUuid) {
+        const supabase = createClient();
+        const { error: assignError } = await supabase
+          .from("viewer_assignments")
+          .insert({
+            viewer_id: newUserUuid,
+            engineer_id: assignToEngineerId,
+            project_id: createProjectId,
+            is_active: true,
+          });
+
+        if (assignError) {
+          setCreateUserWarning(
+            "User created but viewer assignment failed. Please assign manually.",
+          );
+        }
+      }
+
       setCreatedCredentials({
         user_id: payload.user_id,
+        new_user_id: payload.new_user_id,
         password: payload.password,
         email: payload.email,
       });
       setCreateName("");
+      setAssignToEngineerId("");
       void loadAdminData();
     } catch {
       setCreateUserError("Failed to create user. Please try again.");
@@ -686,6 +786,42 @@ export default function AdminPage() {
               </select>
             </div>
 
+            {createRole === "viewer" && (
+              <div>
+                <label
+                  htmlFor="assign-engineer"
+                  className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                >
+                  Assign to Site Engineer
+                </label>
+                <select
+                  id="assign-engineer"
+                  required
+                  value={assignToEngineerId}
+                  onChange={(event) =>
+                    setAssignToEngineerId(event.target.value)
+                  }
+                  disabled={
+                    isCreatingUser ||
+                    isLoadingEngineers ||
+                    engineerOptions.length === 0
+                  }
+                  className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+                >
+                  <option value="" disabled>
+                    {isLoadingEngineers
+                      ? "Loading engineers..."
+                      : "Select Site Engineer..."}
+                  </option>
+                  {engineerOptions.map((engineer) => (
+                    <option key={engineer.user_id} value={engineer.user_id}>
+                      {engineer.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             {createUserError && (
               <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
                 {createUserError}
@@ -694,7 +830,11 @@ export default function AdminPage() {
 
             <button
               type="submit"
-              disabled={isCreatingUser || projects.length === 0}
+              disabled={
+                isCreatingUser ||
+                projects.length === 0 ||
+                (createRole === "viewer" && !assignToEngineerId)
+              }
               className="inline-flex items-center gap-2 rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
             >
               {isCreatingUser && (
@@ -709,6 +849,11 @@ export default function AdminPage() {
               <p className="text-sm font-semibold text-green-900 dark:text-green-200">
                 User created successfully
               </p>
+              {createUserWarning && (
+                <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
+                  {createUserWarning}
+                </p>
+              )}
               <p className="mt-3 text-xs text-green-800 dark:text-green-300">
                 Save these credentials — password cannot be recovered
               </p>

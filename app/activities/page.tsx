@@ -7,6 +7,7 @@ import { Loader2 } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import { createClient } from "@/lib/supabase/client";
+import { displayUserId } from "@/lib/admin/credentials";
 import { useActiveProject } from "@/lib/hooks/useActiveProject";
 
 type Activity = {
@@ -41,6 +42,14 @@ type MyActivityRow = {
   start_date: string | null;
   finish_date: string | null;
   delay_days: number | null;
+};
+
+type AssignedViewer = {
+  id: string;
+  viewer_id: string;
+  is_active: boolean;
+  name: string;
+  email: string;
 };
 
 function normalizeMyActivity(row: Record<string, unknown>): MyActivityRow | null {
@@ -1371,7 +1380,7 @@ type UpdateProgressResponse = {
 
 type SessionDailyLog = {
   id: string;
-  session_id: string;
+  session_id: string | null;
   log_date: string;
   note: string;
   logged_by: string | null;
@@ -1391,11 +1400,10 @@ function SiteEngineerDailyLogSection({ projectId }: { projectId: string }) {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitSuccess, setSubmitSuccess] = useState(false);
 
-  const loadLogs = useCallback(async (sessionId: string, userId: string) => {
+  const loadLogs = useCallback(async (userId: string) => {
     const { data: logsData, error: logsError } = await supabase
       .from("session_daily_logs")
       .select("*")
-      .eq("session_id", sessionId)
       .eq("logged_by", userId)
       .order("log_date", { ascending: false })
       .order("created_at", { ascending: false })
@@ -1431,15 +1439,15 @@ function SiteEngineerDailyLogSection({ projectId }: { projectId: string }) {
         return;
       }
 
-      let resolvedUserId: string | null = null;
       if (authError || !user) {
         if (authError) {
           console.error("Failed to get current user:", authError.message);
         }
         setCurrentUserId(null);
+        setDailyLogs([]);
       } else {
-        resolvedUserId = user.id;
         setCurrentUserId(user.id);
+        await loadLogs(user.id);
       }
 
       const { data: sessionData, error: sessionError } = await supabase
@@ -1457,19 +1465,12 @@ function SiteEngineerDailyLogSection({ projectId }: { projectId: string }) {
       if (sessionError) {
         console.error("Failed to load active session:", sessionError.message);
         setActiveSessionId(null);
-        setDailyLogs([]);
       } else {
         const sessionId =
           sessionData && typeof sessionData.id === "string"
             ? sessionData.id
             : null;
         setActiveSessionId(sessionId);
-
-        if (sessionId && resolvedUserId) {
-          await loadLogs(sessionId, resolvedUserId);
-        } else {
-          setDailyLogs([]);
-        }
       }
 
       if (!cancelled) {
@@ -1499,10 +1500,6 @@ function SiteEngineerDailyLogSection({ projectId }: { projectId: string }) {
   }, [submitSuccess]);
 
   const handleAddLog = async () => {
-    if (!activeSessionId) {
-      return;
-    }
-
     if (!currentUserId) {
       return;
     }
@@ -1518,7 +1515,7 @@ function SiteEngineerDailyLogSection({ projectId }: { projectId: string }) {
     setSubmitSuccess(false);
 
     const { error } = await supabase.from("session_daily_logs").insert({
-      session_id: activeSessionId,
+      session_id: activeSessionId ?? null,
       log_date: selectedDate,
       note: note.trim(),
       logged_by: currentUserId,
@@ -1534,7 +1531,7 @@ function SiteEngineerDailyLogSection({ projectId }: { projectId: string }) {
     setNote("");
     setSelectedDate(new Date().toISOString().split("T")[0]);
     setSubmitSuccess(true);
-    await loadLogs(activeSessionId, currentUserId);
+    await loadLogs(currentUserId);
     setIsAddingLog(false);
   };
 
@@ -1552,10 +1549,6 @@ function SiteEngineerDailyLogSection({ projectId }: { projectId: string }) {
           <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
           Loading daily log...
         </div>
-      ) : !activeSessionId ? (
-        <p className="mt-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
-          No active planning session. Contact your planner.
-        </p>
       ) : (
         <>
           <div className="mt-4 space-y-4 rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900/40">
@@ -1596,7 +1589,7 @@ function SiteEngineerDailyLogSection({ projectId }: { projectId: string }) {
               <button
                 type="button"
                 onClick={() => void handleAddLog()}
-                disabled={isAddingLog || !activeSessionId || !currentUserId}
+                disabled={isAddingLog || !currentUserId || !note.trim()}
                 className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
               >
                 {isAddingLog ? "Adding..." : "Add Log"}
@@ -1617,7 +1610,7 @@ function SiteEngineerDailyLogSection({ projectId }: { projectId: string }) {
           <div className="mt-6 space-y-3">
             {dailyLogs.length === 0 ? (
               <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                No logs yet for this session.
+                No logs yet.
               </p>
             ) : (
               dailyLogs.map((log) => (
@@ -1641,6 +1634,160 @@ function SiteEngineerDailyLogSection({ projectId }: { projectId: string }) {
   );
 }
 
+function SiteEngineerMyViewersSection({
+  projectId,
+  engineerId,
+}: {
+  projectId: string;
+  engineerId: string;
+}) {
+  const [viewers, setViewers] = useState<AssignedViewer[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadViewers() {
+      setIsLoading(true);
+      setFetchError(null);
+
+      const { data: assignmentRows, error: assignmentError } = await supabase
+        .from("viewer_assignments")
+        .select("id, viewer_id, is_active")
+        .eq("engineer_id", engineerId)
+        .eq("project_id", projectId);
+
+      if (cancelled) {
+        return;
+      }
+
+      if (assignmentError) {
+        setFetchError(assignmentError.message);
+        setViewers([]);
+        setIsLoading(false);
+        return;
+      }
+
+      const rows = assignmentRows ?? [];
+      const viewerIds = rows.map((row) => row.viewer_id);
+
+      if (viewerIds.length === 0) {
+        setViewers([]);
+        setIsLoading(false);
+        return;
+      }
+
+      const { data: profileRows, error: profileError } = await supabase
+        .from("profiles")
+        .select("id, name, email")
+        .in("id", viewerIds)
+        .order("name");
+
+      if (cancelled) {
+        return;
+      }
+
+      if (profileError) {
+        setFetchError(profileError.message);
+        setViewers([]);
+        setIsLoading(false);
+        return;
+      }
+
+      const profileById = new Map(
+        (profileRows ?? []).map((profile) => [profile.id, profile]),
+      );
+
+      const normalizedViewers = rows
+        .map((row) => {
+          const profile = profileById.get(row.viewer_id);
+          if (!profile) {
+            return null;
+          }
+
+          return {
+            id: row.id,
+            viewer_id: row.viewer_id,
+            is_active: row.is_active ?? false,
+            name: profile.name,
+            email: profile.email,
+          };
+        })
+        .filter((row): row is AssignedViewer => row !== null)
+        .sort((left, right) => left.name.localeCompare(right.name));
+
+      setViewers(normalizedViewers);
+      setIsLoading(false);
+    }
+
+    void loadViewers();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [engineerId, projectId]);
+
+  return (
+    <section className="mt-8 rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+      <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+        My Viewers
+      </h2>
+      <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+        Viewers assigned to your activities.
+      </p>
+
+      {isLoading ? (
+        <div className="mt-6 flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
+          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+          Loading viewers...
+        </div>
+      ) : fetchError ? (
+        <p className="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
+          {fetchError}
+        </p>
+      ) : viewers.length === 0 ? (
+        <p className="mt-6 text-sm text-zinc-600 dark:text-zinc-400">
+          No viewers assigned to you yet.
+        </p>
+      ) : (
+        <div className="mt-6 overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
+          <table className="min-w-full divide-y divide-zinc-200 text-left text-sm dark:divide-zinc-800">
+            <thead className="bg-zinc-50 dark:bg-zinc-900/60">
+              <tr>
+                <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+                  Name
+                </th>
+                <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+                  User ID
+                </th>
+                <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+                  Status
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-200 bg-white dark:divide-zinc-800 dark:bg-zinc-950">
+              {viewers.map((viewer) => (
+                <tr key={viewer.id}>
+                  <td className="whitespace-nowrap px-4 py-3 font-medium text-zinc-900 dark:text-zinc-100">
+                    {viewer.name}
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-zinc-700 dark:text-zinc-300">
+                    {displayUserId(viewer.email)}
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-3 text-zinc-700 dark:text-zinc-300">
+                    {viewer.is_active ? "Active" : "Inactive"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
 export default function ActivitiesPage() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
@@ -1655,6 +1802,7 @@ export default function ActivitiesPage() {
   >({});
   const [projectId, setProjectId] = useState<string | null>(null);
   const [initError, setInitError] = useState<string | null>(null);
+  const [viewerEngineerMissing, setViewerEngineerMissing] = useState(false);
   const feedbackTimeoutsRef = useRef<
     Record<string, ReturnType<typeof setTimeout>>
   >({});
@@ -1734,6 +1882,27 @@ export default function ActivitiesPage() {
         if (!cancelled) {
           setRole(resolvedRole);
           setRoleLoading(false);
+        }
+
+        if (resolvedRole === "viewer") {
+          const { data: viewerAssignment, error: viewerError } =
+            await supabaseClient
+              .from("viewer_assignments")
+              .select("engineer_id")
+              .eq("viewer_id", authUser.id)
+              .eq("project_id", resolvedProjectId)
+              .eq("is_active", true)
+              .maybeSingle();
+
+          if (viewerError) {
+            throw new Error(viewerError.message);
+          }
+
+          if (!cancelled) {
+            setViewerEngineerMissing(!viewerAssignment?.engineer_id);
+          }
+        } else if (!cancelled) {
+          setViewerEngineerMissing(false);
         }
 
         const { data: activityRows, error: activitiesError } =
@@ -1884,7 +2053,24 @@ export default function ActivitiesPage() {
   }
 
   const isSiteEngineer = role === "site_engineer";
+  const isViewer = role === "viewer";
   const showUpdateColumn = isSiteEngineer && !roleLoading;
+
+  if (isViewer && viewerEngineerMissing) {
+    return (
+      <main className="px-6 py-8">
+        <header className="mb-6">
+          <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-100">
+            Activities
+          </h1>
+        </header>
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-8 text-center text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
+          Your account has not been linked to a Site Engineer yet. Please
+          contact your administrator.
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="px-6 py-8">
@@ -1917,8 +2103,14 @@ export default function ActivitiesPage() {
         />
       )}
 
-      {isSiteEngineer && projectId && (
-        <SiteEngineerDailyLogSection projectId={projectId} />
+      {isSiteEngineer && projectId && user && (
+        <>
+          <SiteEngineerDailyLogSection projectId={projectId} />
+          <SiteEngineerMyViewersSection
+            projectId={projectId}
+            engineerId={user.id}
+          />
+        </>
       )}
     </main>
   );
