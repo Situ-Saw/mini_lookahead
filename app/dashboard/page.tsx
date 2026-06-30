@@ -20,6 +20,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useActiveProject } from "@/lib/hooks/useActiveProject";
+import { useCurrentUser } from "@/lib/contexts/UserContext";
 
 const MS_PER_DAY = 86_400_000;
 
@@ -119,39 +120,37 @@ function getPpcColorClasses(ppc: number): {
   stroke: string;
   gradient: string;
 } {
+  // gradient used for the Project Completion card background
+  // dark mode → white/95 card (matches rest of page), light mode → subtle tinted gradient
   if (ppc >= 100) {
     return {
-      text: "text-emerald-600 dark:text-emerald-400",
-      bar: "bg-emerald-500 dark:bg-emerald-400",
-      stroke: "stroke-emerald-500 dark:stroke-emerald-400",
-      gradient:
-        "from-emerald-50 via-white to-white dark:from-emerald-950/40 dark:via-zinc-950 dark:to-zinc-950",
+      text: "text-emerald-600 dark:text-emerald-700",
+      bar: "bg-emerald-500 dark:bg-emerald-500",
+      stroke: "stroke-emerald-500 dark:stroke-emerald-600",
+      gradient: "from-emerald-50 via-white to-white dark:bg-white/95",
     };
   }
   if (ppc >= 71) {
     return {
-      text: "text-blue-600 dark:text-blue-400",
-      bar: "bg-blue-500 dark:bg-blue-400",
-      stroke: "stroke-blue-500 dark:stroke-blue-400",
-      gradient:
-        "from-blue-50 via-white to-white dark:from-blue-950/40 dark:via-zinc-950 dark:to-zinc-950",
+      text: "text-blue-600 dark:text-[#2563a8]",
+      bar: "bg-blue-500 dark:bg-blue-500",
+      stroke: "stroke-blue-500 dark:stroke-[#2563a8]",
+      gradient: "from-blue-50 via-white to-white dark:bg-white/95",
     };
   }
   if (ppc >= 41) {
     return {
-      text: "text-amber-600 dark:text-amber-400",
+      text: "text-amber-600 dark:text-amber-700",
       bar: "bg-amber-400 dark:bg-amber-500",
-      stroke: "stroke-amber-500 dark:stroke-amber-400",
-      gradient:
-        "from-amber-50 via-white to-white dark:from-amber-950/40 dark:via-zinc-950 dark:to-zinc-950",
+      stroke: "stroke-amber-500 dark:stroke-amber-600",
+      gradient: "from-amber-50 via-white to-white dark:bg-white/95",
     };
   }
   return {
-    text: "text-red-600 dark:text-red-400",
-    bar: "bg-red-500 dark:bg-red-400",
-    stroke: "stroke-red-500 dark:stroke-red-400",
-    gradient:
-      "from-red-50 via-white to-white dark:from-red-950/40 dark:via-zinc-950 dark:to-zinc-950",
+    text: "text-red-600 dark:text-red-700",
+    bar: "bg-red-500 dark:bg-red-500",
+    stroke: "stroke-red-500 dark:stroke-red-600",
+    gradient: "from-red-50 via-white to-white dark:bg-white/95",
   };
 }
 
@@ -295,76 +294,128 @@ function computeStats(
   };
 }
 
+// Cards are white/95 in dark mode — text uses dark-on-light colors in both modes.
+// Semantic colors (green/amber/red) are preserved; only card bg and label neutralised.
 const VARIANT_STYLES: Record<
   KpiVariant,
   {
     card: string;
-    border: string;
+    gradient: string;
     label: string;
     value: string;
-    icon: string;
+    iconBg: string;
+    iconColor: string;
+    leftAccent: string;
   }
 > = {
   neutral: {
-    card: "bg-white dark:bg-zinc-950",
-    border: "border-l-zinc-400 dark:border-l-zinc-500",
-    label: "text-zinc-500 dark:text-zinc-400",
-    value: "text-zinc-900 dark:text-zinc-100",
-    icon: "text-zinc-400 dark:text-zinc-500",
+    card: "bg-white dark:bg-white/95",
+    gradient: "bg-gradient-to-br from-zinc-50 to-white dark:bg-white/95",
+    label: "text-zinc-500 dark:text-zinc-500",
+    value: "text-zinc-900 dark:text-zinc-900",
+    iconBg: "bg-zinc-100 dark:bg-zinc-100",
+    iconColor: "text-zinc-600 dark:text-zinc-600",
+    leftAccent: "border-l-[#359FAB] dark:border-l-[#359FAB]",
   },
   green: {
-    card: "bg-emerald-50/80 dark:bg-emerald-950/20",
-    border: "border-l-emerald-500 dark:border-l-emerald-400",
-    label: "text-emerald-700 dark:text-emerald-300",
-    value: "text-emerald-900 dark:text-emerald-100",
-    icon: "text-emerald-500 dark:text-emerald-400",
+    card: "bg-white dark:bg-white/95",
+    gradient: "bg-gradient-to-br from-emerald-50 to-white dark:bg-white/95",
+    label: "text-zinc-500 dark:text-zinc-500",
+    value: "text-emerald-800 dark:text-emerald-700",
+    iconBg: "bg-emerald-100 dark:bg-emerald-100",
+    iconColor: "text-emerald-600 dark:text-emerald-600",
+    leftAccent: "border-l-emerald-500 dark:border-l-emerald-500",
   },
   blue: {
-    card: "bg-blue-50/80 dark:bg-blue-950/20",
-    border: "border-l-blue-500 dark:border-l-blue-400",
-    label: "text-blue-700 dark:text-blue-300",
-    value: "text-blue-900 dark:text-blue-100",
-    icon: "text-blue-500 dark:text-blue-400",
+    card: "bg-white dark:bg-white/95",
+    gradient: "bg-gradient-to-br from-blue-50 to-white dark:bg-white/95",
+    label: "text-zinc-500 dark:text-zinc-500",
+    value: "text-[#2563a8] dark:text-[#2563a8]",
+    iconBg: "bg-blue-100 dark:bg-blue-100",
+    iconColor: "text-blue-600 dark:text-blue-600",
+    leftAccent: "border-l-[#54B5FB] dark:border-l-[#54B5FB]",
   },
   gray: {
-    card: "bg-zinc-50/80 dark:bg-zinc-900/40",
-    border: "border-l-zinc-400 dark:border-l-zinc-500",
-    label: "text-zinc-600 dark:text-zinc-400",
-    value: "text-zinc-800 dark:text-zinc-200",
-    icon: "text-zinc-400 dark:text-zinc-500",
+    card: "bg-white dark:bg-white/95",
+    gradient: "bg-gradient-to-br from-zinc-50 to-white dark:bg-white/95",
+    label: "text-zinc-500 dark:text-zinc-500",
+    value: "text-zinc-700 dark:text-zinc-700",
+    iconBg: "bg-zinc-100 dark:bg-zinc-100",
+    iconColor: "text-zinc-500 dark:text-zinc-500",
+    leftAccent: "border-l-zinc-400 dark:border-l-zinc-400",
   },
   amber: {
-    card: "bg-amber-50/80 dark:bg-amber-950/20",
-    border: "border-l-amber-500 dark:border-l-amber-400",
-    label: "text-amber-700 dark:text-amber-300",
-    value: "text-amber-900 dark:text-amber-100",
-    icon: "text-amber-500 dark:text-amber-400",
+    card: "bg-white dark:bg-white/95",
+    gradient: "bg-gradient-to-br from-amber-50 to-white dark:bg-white/95",
+    label: "text-zinc-500 dark:text-zinc-500",
+    value: "text-amber-800 dark:text-amber-700",
+    iconBg: "bg-amber-100 dark:bg-amber-100",
+    iconColor: "text-amber-600 dark:text-amber-600",
+    leftAccent: "border-l-amber-500 dark:border-l-amber-500",
   },
   red: {
-    card: "bg-red-50/80 dark:bg-red-950/20",
-    border: "border-l-red-500 dark:border-l-red-400",
-    label: "text-red-700 dark:text-red-300",
-    value: "text-red-900 dark:text-red-100",
-    icon: "text-red-500 dark:text-red-400",
+    card: "bg-white dark:bg-white/95",
+    gradient: "bg-gradient-to-br from-red-50 to-white dark:bg-white/95",
+    label: "text-zinc-500 dark:text-zinc-500",
+    value: "text-red-800 dark:text-red-700",
+    iconBg: "bg-red-100 dark:bg-red-100",
+    iconColor: "text-red-600 dark:text-red-600",
+    leftAccent: "border-l-red-500 dark:border-l-red-500",
   },
 };
 
-const STATUS_BADGE_COLORS: Record<string, string> = {
-  red: "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400",
-  emerald:
-    "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400",
-  zinc: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
-};
+function getHealthStatus(
+  ppc: number,
+  hasData: boolean,
+): { label: string; color: string } {
+  // Badges rendered on the project header card (white/95 in dark mode)
+  if (!hasData) {
+    return {
+      label: "No Data",
+      color: "bg-zinc-100 text-zinc-600 dark:bg-zinc-200 dark:text-zinc-600",
+    };
+  }
+  if (ppc >= 71) {
+    return {
+      label: "On Track",
+      color: "bg-emerald-100 text-emerald-800 dark:bg-emerald-100 dark:text-emerald-700",
+    };
+  }
+  if (ppc >= 41) {
+    return {
+      label: "At Risk",
+      color: "bg-amber-100 text-amber-800 dark:bg-amber-100 dark:text-amber-700",
+    };
+  }
+  return {
+    label: "Delayed",
+    color: "bg-red-100 text-red-800 dark:bg-red-100 dark:text-red-700",
+  };
+}
 
-const SCHEDULE_PILL_COLORS: Record<string, string> = {
-  red: "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400",
-  emerald:
-    "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400",
-  zinc: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
-};
+// Badges rendered inside white/95 cards — use light semantic bg in both modes
+const STATUS_BADGE_STYLES = {
+  red: "bg-red-100 text-red-700 dark:bg-red-100 dark:text-red-700",
+  emerald: "bg-emerald-100 text-emerald-700 dark:bg-emerald-100 dark:text-emerald-700",
+  zinc: "bg-zinc-100 text-zinc-700 dark:bg-zinc-200 dark:text-zinc-600",
+} as const;
+
+function ChipSkeleton() {
+  return (
+    <div className="h-7 w-32 animate-pulse rounded-full bg-zinc-200 dark:bg-zinc-200" />
+  );
+}
 
 function KpiSkeleton() {
-  return <div className="mt-3 h-10 w-24 animate-pulse rounded-lg bg-zinc-200 dark:bg-zinc-800" />;
+  return (
+    <div className="mt-4 h-14 w-28 animate-pulse rounded-xl bg-zinc-200 dark:bg-zinc-200" />
+  );
+}
+
+function CardSkeleton() {
+  return (
+    <div className="h-32 animate-pulse rounded-2xl bg-zinc-100 shadow-lg shadow-black/5 dark:bg-white/95 dark:shadow-2xl dark:shadow-black/30" />
+  );
 }
 
 function KpiCard({
@@ -374,10 +425,11 @@ function KpiCard({
   isLoading,
   variant = "neutral",
   icon: Icon,
+  showLeftAccent = false,
+  valueClassName,
   trendText,
   trendColor,
-  valueClassName,
-  cardClassName,
+  criticalBackground = false,
 }: {
   label: string;
   value?: number;
@@ -385,47 +437,59 @@ function KpiCard({
   isLoading: boolean;
   variant?: KpiVariant;
   icon: LucideIcon;
+  showLeftAccent?: boolean;
+  valueClassName?: string;
   trendText?: string;
   trendColor?: string;
-  valueClassName?: string;
-  cardClassName?: string;
+  criticalBackground?: boolean;
 }) {
   const styles = VARIANT_STYLES[variant];
   const rendered = displayValue ?? value?.toLocaleString() ?? "—";
-  const cardBg = cardClassName ?? styles.card;
+  const cardGradient = criticalBackground
+    ? "bg-gradient-to-br from-red-50 to-white dark:bg-white/95"
+    : showLeftAccent && variant === "red"
+      ? "bg-white dark:bg-white/95"
+      : styles.gradient;
 
   return (
     <div
-      className={`relative overflow-hidden rounded-xl border border-zinc-100 p-5 shadow-md transition-shadow hover:shadow-lg dark:border-zinc-800 ${cardBg}`}
+      className={`overflow-hidden rounded-2xl border border-zinc-200 p-6 shadow-lg shadow-black/5 transition-shadow hover:shadow-xl dark:border-zinc-200/30 dark:shadow-2xl dark:shadow-black/40 ${cardGradient} ${
+        showLeftAccent ? `border-l-4 ${styles.leftAccent}` : ""
+      }`}
     >
-      <Icon
-        className={`absolute right-4 top-4 h-5 w-5 ${styles.icon}`}
-        aria-hidden="true"
-      />
-      <p className={`pr-8 text-sm font-medium ${styles.label}`}>{label}</p>
-      {isLoading ? (
-        <KpiSkeleton />
-      ) : (
-        <>
-          <p
-            className={`mt-2 text-4xl font-bold tracking-tight ${valueClassName ?? styles.value}`}
-          >
-            {rendered}
-          </p>
-          {trendText && (
-            <p className={`mt-1 text-xs font-medium ${trendColor ?? "text-zinc-500"}`}>
-              {trendText}
-            </p>
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0 flex-1">
+          <p className={`text-sm font-medium ${styles.label}`}>{label}</p>
+          {isLoading ? (
+            <KpiSkeleton />
+          ) : (
+            <>
+              <p
+                className={`mt-3 text-5xl font-black tracking-tight ${valueClassName ?? styles.value}`}
+              >
+                {rendered}
+              </p>
+              {trendText && (
+                <p className={`mt-1 text-xs font-medium ${trendColor ?? ""}`}>
+                  {trendText}
+                </p>
+              )}
+            </>
           )}
-        </>
-      )}
+        </div>
+        <div className={`shrink-0 rounded-xl p-2.5 ${styles.iconBg}`}>
+          <Icon className={`h-5 w-5 ${styles.iconColor}`} aria-hidden="true" />
+        </div>
+      </div>
     </div>
   );
 }
 
+type TimelineHighlight = "delayed" | "early" | "on-track" | "neutral";
+
 type StatusBadge = {
   label: string;
-  color: "red" | "emerald" | "zinc";
+  className: string;
 };
 
 function TimelineCard({
@@ -434,45 +498,64 @@ function TimelineCard({
   isLoading,
   variant = "neutral",
   subtext,
+  icon: Icon,
+  highlight = "neutral",
   statusBadge,
   schedulePill,
-  borderClassName,
 }: {
   label: string;
   value: string;
   isLoading: boolean;
   variant?: KpiVariant;
   subtext?: string;
+  icon?: LucideIcon;
+  highlight?: TimelineHighlight;
   statusBadge?: StatusBadge;
-  schedulePill?: { label: string; color: "red" | "emerald" | "zinc" };
-  borderClassName?: string;
+  schedulePill?: StatusBadge;
 }) {
   const styles = VARIANT_STYLES[variant];
 
+  const highlightClasses: Record<TimelineHighlight, string> = {
+    delayed:
+      "border-2 border-red-500 bg-white dark:border-red-500 dark:bg-white/95 dark:shadow-2xl dark:shadow-black/40",
+    early:
+      "border-2 border-emerald-500 bg-white dark:border-emerald-500 dark:bg-white/95 dark:shadow-2xl dark:shadow-black/40",
+    "on-track":
+      "border-2 border-zinc-200 bg-white dark:border-zinc-200/30 dark:bg-white/95 dark:shadow-2xl dark:shadow-black/40",
+    neutral: `border-zinc-200 dark:border-zinc-200/30 dark:shadow-2xl dark:shadow-black/40 ${styles.gradient}`,
+  };
+
   return (
     <div
-      className={`rounded-xl border p-5 shadow-sm transition-shadow hover:shadow-md dark:border-zinc-800 ${borderClassName ?? `border-zinc-200 border-l-4 ${styles.border} ${styles.card}`}`}
+      className={`overflow-hidden rounded-2xl border p-6 shadow-lg shadow-black/5 transition-shadow hover:shadow-xl ${highlightClasses[highlight]}`}
     >
-      <p className={`text-sm font-medium ${styles.label}`}>{label}</p>
+      <div className="flex items-start justify-between gap-3">
+        <p className={`text-sm font-medium ${styles.label}`}>{label}</p>
+        {Icon && (
+          <div className={`shrink-0 rounded-xl p-2 ${styles.iconBg}`}>
+            <Icon className={`h-4 w-4 ${styles.iconColor}`} aria-hidden="true" />
+          </div>
+        )}
+      </div>
       {isLoading ? (
         <KpiSkeleton />
       ) : (
         <>
           <p
-            className={`mt-2 text-2xl font-bold tracking-tight sm:text-3xl ${styles.value}`}
+            className={`mt-3 text-2xl font-bold tracking-tight sm:text-3xl ${styles.value}`}
           >
             {value}
           </p>
           {statusBadge && (
             <span
-              className={`mt-2 inline-flex rounded-full px-2.5 py-0.5 text-xs font-bold ${STATUS_BADGE_COLORS[statusBadge.color]}`}
+              className={`mt-2 inline-flex rounded-full px-2.5 py-0.5 text-xs font-bold ${statusBadge.className}`}
             >
               {statusBadge.label}
             </span>
           )}
           {schedulePill && (
             <span
-              className={`mt-2 inline-flex rounded-full px-2.5 py-0.5 text-xs font-bold ${SCHEDULE_PILL_COLORS[schedulePill.color]}`}
+              className={`mt-2 inline-flex rounded-full px-2.5 py-0.5 text-xs font-bold ${schedulePill.className}`}
             >
               {schedulePill.label}
             </span>
@@ -499,14 +582,11 @@ function SectionHeader({
     <div className="mb-6">
       <div className="flex items-center gap-2.5">
         {Icon && (
-          <div className="rounded-lg bg-blue-50 p-1.5 dark:bg-blue-950/40">
-            <Icon
-              className="h-4 w-4 text-blue-600 dark:text-blue-400"
-              aria-hidden="true"
-            />
+          <div className="rounded-lg bg-[#54B5FB]/10 p-1.5 dark:bg-[#54B5FB]/20">
+            <Icon className="h-4 w-4 text-[#2563a8] dark:text-[#54B5FB]" />
           </div>
         )}
-        <h2 className="text-base font-bold uppercase tracking-widest text-zinc-900 dark:text-zinc-100">
+        <h2 className="text-base font-bold uppercase tracking-widest text-zinc-900 dark:text-white">
           {title}
         </h2>
       </div>
@@ -520,6 +600,20 @@ function SectionHeader({
   );
 }
 
+// Pill inside the PPC card (white/95 in dark mode)
+function getPpcPillClasses(ppc: number): string {
+  if (ppc >= 100) {
+    return "bg-emerald-100 text-emerald-800 dark:bg-emerald-100 dark:text-emerald-700";
+  }
+  if (ppc >= 71) {
+    return "bg-blue-100 text-blue-800 dark:bg-blue-100 dark:text-[#2563a8]";
+  }
+  if (ppc >= 41) {
+    return "bg-amber-100 text-amber-800 dark:bg-amber-100 dark:text-amber-700";
+  }
+  return "bg-red-100 text-red-800 dark:bg-red-100 dark:text-red-700";
+}
+
 function CircularProgress({
   value,
   strokeClass,
@@ -527,28 +621,28 @@ function CircularProgress({
   value: number;
   strokeClass: string;
 }) {
-  const radius = 52;
+  const radius = 64;
   const circumference = 2 * Math.PI * radius;
   const clamped = Math.min(100, Math.max(0, value));
   const offset = circumference - (clamped / 100) * circumference;
 
   return (
     <svg
-      className="h-36 w-36 shrink-0 -rotate-90"
-      viewBox="0 0 120 120"
+      className="h-44 w-44 shrink-0 -rotate-90"
+      viewBox="0 0 140 140"
       aria-hidden="true"
     >
       <circle
-        cx="60"
-        cy="60"
+        cx="70"
+        cy="70"
         r={radius}
         fill="none"
         strokeWidth="10"
         className="stroke-zinc-200 dark:stroke-zinc-800"
       />
       <circle
-        cx="60"
-        cy="60"
+        cx="70"
+        cy="70"
         r={radius}
         fill="none"
         strokeWidth="10"
@@ -615,6 +709,12 @@ function getNetDelayDisplay(netDelay: number | null): {
 
 export default function DashboardPage() {
   const { activeProject, isLoading: isProjectLoading } = useActiveProject();
+  const {
+    projectId,
+    isLoading: isUserContextLoading,
+    isProjectRoleLoading,
+  } = useCurrentUser();
+  const isRoleLoading = isUserContextLoading || isProjectRoleLoading;
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -626,7 +726,7 @@ export default function DashboardPage() {
   }, []);
 
   const loadDashboardData = useCallback(
-    async (isMounted: () => boolean, projectId: string) => {
+    async (isMounted: () => boolean, fetchProjectId: string) => {
     setIsLoading(true);
     setFetchError(null);
 
@@ -636,11 +736,11 @@ export default function DashboardPage() {
         .select(
           "status, start_date, finish_date, delay_days, is_baseline",
         )
-        .eq("project_id", projectId),
+        .eq("project_id", fetchProjectId),
       supabase
         .from("constraints")
         .select("status")
-        .eq("project_id", projectId),
+        .eq("project_id", fetchProjectId),
     ]);
 
     if (!isMounted()) return;
@@ -672,16 +772,16 @@ export default function DashboardPage() {
   );
 
   useEffect(() => {
-    if (!activeProject) return;
+    if (!activeProject || !projectId || isRoleLoading) return;
 
     let mounted = true;
 
-    void loadDashboardData(() => mounted, activeProject.id);
+    void loadDashboardData(() => mounted, projectId);
 
     return () => {
       mounted = false;
     };
-  }, [loadDashboardData, refreshKey, activeProject]);
+  }, [loadDashboardData, refreshKey, activeProject, projectId, isRoleLoading]);
 
   const handleRefresh = useCallback(() => {
     setRefreshKey((current) => current + 1);
@@ -716,49 +816,68 @@ export default function DashboardPage() {
   const projectedDurationLonger =
     (stats?.projectedDurationDays ?? 0) > (stats?.plannedDurationDays ?? 0);
 
-  const isDelayCritical = useMemo(() => {
-    const total = stats?.totalActivities ?? 0;
-    const delayed = stats?.delayedActivities ?? 0;
-    return total > 0 && delayed > total * 0.3;
-  }, [stats?.totalActivities, stats?.delayedActivities]);
-
-  const projectedEndStatusBadge = useMemo((): StatusBadge => {
-    if (projectedEndVariant === "red") {
-      return { label: "DELAYED", color: "red" };
-    }
-    if (projectedEndVariant === "green") {
-      return { label: "AHEAD", color: "emerald" };
-    }
-    return { label: "ON TRACK", color: "zinc" };
-  }, [projectedEndVariant]);
-
-  const netDelaySchedulePill = useMemo((): {
-    label: string;
-    color: "red" | "emerald" | "zinc";
-  } | null => {
-    const netDelay = stats?.netDelayDays ?? null;
-    if (netDelay === null) return null;
-    if (netDelay > 0) {
-      return { label: "OVER SCHEDULE", color: "red" };
-    }
-    if (netDelay < 0) {
-      return { label: "AHEAD OF SCHEDULE", color: "emerald" };
-    }
-    return { label: "ON SCHEDULE", color: "zinc" };
+  const netDelayHighlight: TimelineHighlight = useMemo(() => {
+    const net = stats?.netDelayDays ?? null;
+    if (net === null) return "neutral";
+    if (net > 0) return "delayed";
+    if (net < 0) return "early";
+    return "on-track";
   }, [stats?.netDelayDays]);
 
-  const netDelayBorderClass = useMemo(() => {
-    const netDelay = stats?.netDelayDays ?? null;
-    if (netDelay === null) {
-      return "border-zinc-200 border-l-4 border-l-zinc-400 bg-white dark:border-zinc-800 dark:bg-zinc-950";
+  const durationDifference = useMemo(() => {
+    const planned = stats?.plannedDurationDays;
+    const projected = stats?.projectedDurationDays;
+    if (
+      planned === null ||
+      planned === undefined ||
+      projected === null ||
+      projected === undefined
+    ) {
+      return null;
     }
-    if (netDelay > 0) {
-      return "border-2 border-red-300 bg-white dark:border-red-800 dark:bg-zinc-950";
+    return projected - planned;
+  }, [stats?.plannedDurationDays, stats?.projectedDurationDays]);
+
+  const showBaselineBanner =
+    !isLoading && stats !== null && stats.baselineCount === 0;
+
+  const hasDashboardData = !isLoading && stats !== null;
+  const healthStatus = getHealthStatus(ppc, hasDashboardData);
+
+  const isDelayCritical = useMemo(() => {
+    if (!stats || stats.totalActivities === 0) return false;
+    return stats.delayedActivities > stats.totalActivities * 0.3;
+  }, [stats]);
+
+  const projectedEndStatusBadge: StatusBadge = useMemo(() => {
+    if (projectedEndVariant === "red") {
+      return { label: "DELAYED", className: STATUS_BADGE_STYLES.red };
     }
-    if (netDelay < 0) {
-      return "border-2 border-emerald-300 bg-white dark:border-emerald-800 dark:bg-zinc-950";
+    if (projectedEndVariant === "green") {
+      return { label: "AHEAD", className: STATUS_BADGE_STYLES.emerald };
     }
-    return "border-zinc-200 border-l-4 border-l-zinc-400 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900/40";
+    return { label: "ON TRACK", className: STATUS_BADGE_STYLES.zinc };
+  }, [projectedEndVariant]);
+
+  const netDelaySchedulePill: StatusBadge | undefined = useMemo(() => {
+    const net = stats?.netDelayDays ?? null;
+    if (net === null) return undefined;
+    if (net > 0) {
+      return {
+        label: "OVER SCHEDULE",
+        className: STATUS_BADGE_STYLES.red,
+      };
+    }
+    if (net < 0) {
+      return {
+        label: "AHEAD OF SCHEDULE",
+        className: STATUS_BADGE_STYLES.emerald,
+      };
+    }
+    return {
+      label: "ON SCHEDULE",
+      className: STATUS_BADGE_STYLES.zinc,
+    };
   }, [stats?.netDelayDays]);
 
   const hasDurationData =
@@ -767,33 +886,31 @@ export default function DashboardPage() {
     stats?.projectedDurationDays !== null &&
     stats?.projectedDurationDays !== undefined;
 
-  const showBaselineBanner =
-    !isLoading && stats !== null && stats.baselineCount === 0;
-
   if (isProjectLoading) {
     return (
-      <main className="flex min-h-[50vh] items-center justify-center bg-zinc-50/50 dark:bg-zinc-950">
-        <Loader2
-          className="h-8 w-8 animate-spin text-zinc-400"
-          aria-label="Loading project"
-        />
+      <main className="relative min-h-[50vh] w-full bg-gradient-to-br from-[#e8f6f7] via-[#eaf4ff] to-[#f0f9ed] dark:bg-none dark:bg-[#0a1420]">
+        <div aria-hidden="true" className="pointer-events-none absolute inset-0 hidden dark:block" style={{ background: "radial-gradient(circle at 30% 20%, rgba(53,159,171,0.3) 0%, transparent 50%), radial-gradient(circle at 80% 80%, rgba(84,181,251,0.25) 0%, transparent 50%)" }} />
+        <div className="relative flex min-h-[50vh] items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-[#359FAB] dark:text-[#54B5FB]" aria-label="Loading project" />
+        </div>
       </main>
     );
   }
 
   if (!activeProject) {
     return (
-      <main className="min-h-full bg-zinc-50/50 dark:bg-zinc-950">
-        <div className="mx-auto w-full max-w-7xl flex-1 p-6 sm:p-10">
-          <div className="rounded-xl border border-zinc-200 bg-white p-8 text-center dark:border-zinc-800 dark:bg-zinc-950">
-            <p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
+      <main className="relative min-h-full w-full bg-gradient-to-br from-[#e8f6f7] via-[#eaf4ff] to-[#f0f9ed] dark:bg-none dark:bg-[#0a1420]">
+        <div aria-hidden="true" className="pointer-events-none absolute inset-0 hidden dark:block" style={{ background: "radial-gradient(circle at 30% 20%, rgba(53,159,171,0.3) 0%, transparent 50%), radial-gradient(circle at 80% 80%, rgba(84,181,251,0.25) 0%, transparent 50%)" }} />
+        <div className="relative mx-auto w-full max-w-7xl flex-1 px-6 py-8 sm:px-10">
+          <div className="rounded-xl border border-zinc-200 bg-white p-8 text-center shadow-lg shadow-black/5 dark:border-zinc-200/30 dark:bg-white/95 dark:shadow-2xl dark:shadow-black/40">
+            <p className="text-sm leading-relaxed text-zinc-600">
               No project selected.
               <br />
               Please select a project to continue.
             </p>
             <Link
               href="/select-project"
-              className="mt-4 inline-flex rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+              className="mt-4 inline-flex rounded-lg bg-[#0a1420] px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-zinc-800"
             >
               Select Project
             </Link>
@@ -804,117 +921,95 @@ export default function DashboardPage() {
   }
 
   return (
-    <main className="min-h-full bg-zinc-50/50 dark:bg-zinc-950">
-      <div className="mx-auto w-full max-w-7xl flex-1 space-y-6 p-6 sm:p-10">
+    <main className="relative min-h-full w-full bg-gradient-to-br from-[#e8f6f7] via-[#eaf4ff] to-[#f0f9ed] dark:bg-none dark:bg-[#0a1420]">
+      {/* Dark mode ambient glow */}
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 hidden dark:block" style={{ background: "radial-gradient(circle at 30% 20%, rgba(53,159,171,0.3) 0%, transparent 50%), radial-gradient(circle at 80% 80%, rgba(84,181,251,0.25) 0%, transparent 50%)" }} />
+      <div className="relative mx-auto w-full max-w-7xl flex-1 space-y-8 px-6 py-8 sm:px-10">
         {showBaselineBanner && (
-          <div className="flex flex-col gap-4 rounded-xl border border-amber-300 bg-gradient-to-r from-amber-100 via-amber-50 to-amber-100 px-6 py-5 shadow-md sm:flex-row sm:items-center sm:justify-between dark:border-amber-800 dark:from-amber-950/60 dark:via-amber-950/30 dark:to-amber-950/60">
-            <div className="flex items-start gap-4">
-              <div className="rounded-full bg-amber-200 p-3 dark:bg-amber-900/60">
+          <div className="rounded-2xl border-2 border-dashed border-amber-300 bg-amber-50 px-8 py-10 dark:border-amber-800 dark:bg-amber-950/20">
+            <div className="flex flex-col items-center text-center">
+              <div className="rounded-full bg-amber-100 p-4 dark:bg-amber-900/40">
                 <AlertTriangle
-                  className="h-6 w-6 text-amber-800 dark:text-amber-200"
+                  className="h-8 w-8 text-amber-600 dark:text-amber-400"
                   aria-hidden="true"
                 />
               </div>
-              <div>
-                <p className="font-semibold text-amber-950 dark:text-amber-100">
-                  No baseline imported yet
-                </p>
-                <p className="mt-1 text-sm text-amber-900 dark:text-amber-200">
-                  Import your baseline schedule to enable PPC and delay analysis.
-                </p>
-              </div>
+              <h3 className="mt-4 text-lg font-semibold text-amber-900 dark:text-amber-100">
+                No baseline imported yet
+              </h3>
+              <p className="mt-2 max-w-sm text-sm text-amber-700 dark:text-amber-300">
+                Import your Primavera P6 baseline schedule to unlock PPC tracking,
+                delay analysis, and project timeline.
+              </p>
+              <Link
+                href="/import"
+                className="mt-6 inline-flex items-center gap-2 rounded-xl bg-amber-600 px-6 py-3 text-sm font-semibold text-white shadow-md transition-colors hover:bg-amber-700"
+              >
+                Import Baseline →
+              </Link>
             </div>
-            <Link
-              href="/import"
-              className="inline-flex shrink-0 items-center justify-center rounded-lg bg-amber-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-amber-700 dark:bg-amber-500 dark:hover:bg-amber-400"
-            >
-              Import Baseline
-            </Link>
           </div>
         )}
 
-        <div className="rounded-2xl bg-zinc-900 px-8 py-8 shadow-xl dark:bg-zinc-800">
+        <div className="rounded-2xl border border-zinc-200 bg-white px-8 py-8 shadow-lg shadow-black/5 dark:border-zinc-200/30 dark:bg-white/95 dark:shadow-2xl dark:shadow-black/40">
           <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
-            <div>
+            <div className="min-w-0 flex-1">
               <p className="text-xs font-semibold uppercase tracking-widest text-zinc-400">
                 Construction Planning System
               </p>
-              <h1 className="mt-2 text-3xl font-bold tracking-tight text-white sm:text-4xl">
+              <h1 className="mt-2 text-2xl font-bold tracking-tight text-zinc-900 sm:text-3xl">
                 {activeProject.name}
               </h1>
               <div className="mt-3 flex flex-wrap items-center gap-2">
-                <span className="rounded-full bg-zinc-700 px-3 py-1 text-xs font-medium text-zinc-300">
+                <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium text-zinc-700">
                   {activeProject.code}
                 </span>
               </div>
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                {isLoading || !stats ? (
-                  <>
-                    <span className="h-6 w-28 animate-pulse rounded-full bg-zinc-700" />
-                    <span className="h-6 w-24 animate-pulse rounded-full bg-zinc-700" />
-                    <span className="h-6 w-32 animate-pulse rounded-full bg-zinc-700" />
-                  </>
-                ) : (
-                  <>
-                    <span className="inline-flex items-center gap-1.5 rounded-full border border-zinc-700 bg-zinc-800 px-3 py-1 text-xs font-medium text-zinc-300">
-                      📅 Baseline: {formatDisplayDate(stats.plannedStartDate)}
-                    </span>
-                    <span className="inline-flex items-center gap-1.5 rounded-full border border-zinc-700 bg-zinc-800 px-3 py-1 text-xs font-medium text-zinc-300">
-                      📊 {stats.totalActivities} Activities
-                    </span>
-                    <span className="inline-flex items-center gap-1.5 rounded-full border border-zinc-700 bg-zinc-800 px-3 py-1 text-xs font-medium text-zinc-300">
-                      ⚠ {stats.openConstraints} Open Constraints
-                    </span>
-                    <span className="inline-flex items-center gap-1.5 rounded-full border border-zinc-700 bg-zinc-800 px-3 py-1 text-xs font-medium text-zinc-300">
-                      🕐{" "}
-                      {lastUpdated ? formatLastUpdated(lastUpdated) : "—"}
-                    </span>
-                  </>
-                )}
-              </div>
+
+              {isLoading || !stats ? (
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <ChipSkeleton />
+                  <ChipSkeleton />
+                  <ChipSkeleton />
+                  <ChipSkeleton />
+                </div>
+              ) : (
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium text-zinc-700">
+                    📅 Baseline: {formatDisplayDate(stats.plannedStartDate)}
+                  </span>
+                  <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium text-zinc-700">
+                    📊 {stats.totalActivities} Activities
+                  </span>
+                  <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium text-zinc-700">
+                    ⚠ {stats.openConstraints} Open Constraints
+                  </span>
+                  <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium text-zinc-700">
+                    🕐 Updated:{" "}
+                    {lastUpdated ? formatLastUpdated(lastUpdated) : "—"}
+                  </span>
+                </div>
+              )}
             </div>
 
-            <div className="flex shrink-0 flex-col items-end gap-3">
-              {(() => {
-                const health = !stats
-                  ? {
-                      label: "No Data",
-                      cls: "bg-zinc-700 text-zinc-400 border-zinc-600",
-                    }
-                  : ppc >= 71
-                    ? {
-                        label: "On Track",
-                        cls: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30",
-                      }
-                    : ppc >= 41
-                      ? {
-                          label: "At Risk",
-                          cls: "bg-amber-500/20 text-amber-300 border-amber-500/30",
-                        }
-                      : {
-                          label: "Delayed",
-                          cls: "bg-red-500/20 text-red-300 border-red-500/30",
-                        };
-                return (
-                  <span
-                    className={`rounded-full border px-4 py-1.5 text-sm font-bold ${health.cls}`}
-                  >
-                    ● {health.label}
-                  </span>
-                );
-              })()}
+            <div className="flex flex-col items-start gap-2 sm:items-end">
+              <span
+                className={`rounded-full px-4 py-2 text-sm font-bold tracking-wide ${healthStatus.color}`}
+              >
+                ● {healthStatus.label}
+              </span>
               <button
                 type="button"
                 onClick={handleRefresh}
                 disabled={isLoading}
                 aria-label="Refresh dashboard data"
-                className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-2 text-sm font-medium text-zinc-300 transition-colors hover:bg-zinc-700 disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-300 dark:bg-zinc-50 dark:text-zinc-700 dark:hover:bg-zinc-100"
               >
                 <RefreshCw
-                  className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`}
+                  className={`h-3.5 w-3.5 ${isLoading ? "animate-spin" : ""}`}
                   aria-hidden="true"
                 />
-                {isLoading ? "Refreshing..." : "Refresh"}
+                Refresh
               </button>
               <p className="text-xs text-zinc-500">
                 {lastUpdated
@@ -926,213 +1021,241 @@ export default function DashboardPage() {
         </div>
 
         {fetchError && (
-          <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
+          <p className="rounded-lg border border-red-200 border-l-4 border-l-red-500 bg-white px-4 py-3 text-sm text-red-800 shadow-lg shadow-red-500/10 dark:bg-white/95">
             Failed to load dashboard data: {fetchError}
           </p>
         )}
 
         <section>
           <SectionHeader title="Activity Status" icon={ClipboardList} />
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <KpiCard
-              label="Total Activities"
-              value={stats?.totalActivities ?? 0}
-              isLoading={isLoading}
-              variant="neutral"
-              icon={ClipboardList}
-            />
-            <KpiCard
-              label="Completed"
-              value={stats?.completedActivities ?? 0}
-              isLoading={isLoading}
-              variant="green"
-              icon={CheckCircle2}
-              trendText={
-                (stats?.completedActivities ?? 0) > 0
-                  ? `↑ ${stats?.completedActivities ?? 0} done`
-                  : undefined
-              }
-              trendColor="text-emerald-600 dark:text-emerald-400"
-            />
-            <KpiCard
-              label="In Progress"
-              value={stats?.inProgressActivities ?? 0}
-              isLoading={isLoading}
-              variant="blue"
-              icon={Clock}
-              trendText={
-                (stats?.inProgressActivities ?? 0) > 0
-                  ? `● ${stats?.inProgressActivities ?? 0} active`
-                  : undefined
-              }
-              trendColor="text-blue-600 dark:text-blue-400"
-            />
-            <KpiCard
-              label="Not Started"
-              value={stats?.notStartedActivities ?? 0}
-              isLoading={isLoading}
-              variant="gray"
-              icon={Circle}
-              trendText={`${stats?.notStartedActivities ?? 0} pending`}
-              trendColor="text-zinc-500 dark:text-zinc-400"
-            />
-          </div>
+          {isLoading ? (
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <CardSkeleton />
+              <CardSkeleton />
+              <CardSkeleton />
+              <CardSkeleton />
+            </div>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <KpiCard
+                label="Total Activities"
+                value={stats?.totalActivities ?? 0}
+                isLoading={isLoading}
+                variant="neutral"
+                icon={ClipboardList}
+              />
+              <KpiCard
+                label="Completed"
+                value={stats?.completedActivities ?? 0}
+                isLoading={isLoading}
+                variant="green"
+                icon={CheckCircle2}
+                trendText={
+                  (stats?.completedActivities ?? 0) > 0
+                    ? `↑ ${stats?.completedActivities ?? 0} done`
+                    : undefined
+                }
+                trendColor="text-emerald-600 dark:text-emerald-400"
+              />
+              <KpiCard
+                label="In Progress"
+                value={stats?.inProgressActivities ?? 0}
+                isLoading={isLoading}
+                variant="blue"
+                icon={Clock}
+                trendText={
+                  (stats?.inProgressActivities ?? 0) > 0
+                    ? `● ${stats?.inProgressActivities ?? 0} active`
+                    : undefined
+                }
+                trendColor="text-blue-600 dark:text-blue-400"
+              />
+              <KpiCard
+                label="Not Started"
+                value={stats?.notStartedActivities ?? 0}
+                isLoading={isLoading}
+                variant="gray"
+                icon={Circle}
+                trendText={`${stats?.notStartedActivities ?? 0} pending`}
+                trendColor="text-zinc-500 dark:text-zinc-400"
+              />
+            </div>
+          )}
         </section>
 
         <section>
           <SectionHeader title="Delay Analysis" icon={AlertTriangle} />
-          <div className="grid gap-4 sm:grid-cols-3">
-            <KpiCard
-              label="Activities Over Schedule"
-              value={stats?.delayedActivities ?? 0}
-              isLoading={isLoading}
-              variant={isDelayCritical ? "red" : "neutral"}
-              icon={AlertTriangle}
-              cardClassName={
-                isDelayCritical
-                  ? undefined
-                  : "bg-white dark:bg-zinc-950"
-              }
-              valueClassName="text-red-600 dark:text-red-400"
-              trendText={
-                (stats?.delayedActivities ?? 0) > 0
-                  ? `↑ ${stats?.delayedActivities ?? 0} over schedule`
-                  : "✓ None delayed"
-              }
-              trendColor={
-                (stats?.delayedActivities ?? 0) > 0
-                  ? "text-red-600 dark:text-red-400"
-                  : "text-emerald-600 dark:text-emerald-400"
-              }
-            />
-            <KpiCard
-              label="Average Delay"
-              displayValue={averageDelayDisplay}
-              isLoading={isLoading}
-              variant="amber"
-              icon={Timer}
-            />
-            <KpiCard
-              label="Running Early"
-              value={stats?.earlyActivities ?? 0}
-              isLoading={isLoading}
-              variant="green"
-              icon={TrendingUp}
-            />
-          </div>
+          {isLoading ? (
+            <div className="grid gap-4 sm:grid-cols-3">
+              <CardSkeleton />
+              <CardSkeleton />
+              <CardSkeleton />
+            </div>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-3">
+              <KpiCard
+                label="Activities Over Schedule"
+                value={stats?.delayedActivities ?? 0}
+                isLoading={isLoading}
+                variant="red"
+                icon={AlertTriangle}
+                showLeftAccent
+                criticalBackground={isDelayCritical}
+                valueClassName="text-red-600 dark:text-red-400"
+                trendText={
+                  (stats?.delayedActivities ?? 0) > 0
+                    ? `↑ ${stats?.delayedActivities ?? 0} over schedule`
+                    : "✓ None delayed"
+                }
+                trendColor={
+                  (stats?.delayedActivities ?? 0) > 0
+                    ? "text-red-600 dark:text-red-400"
+                    : "text-emerald-600 dark:text-emerald-400"
+                }
+              />
+              <KpiCard
+                label="Average Delay"
+                displayValue={averageDelayDisplay}
+                isLoading={isLoading}
+                variant="amber"
+                icon={Timer}
+                valueClassName="text-amber-600 dark:text-amber-400"
+              />
+              <KpiCard
+                label="Running Early"
+                value={stats?.earlyActivities ?? 0}
+                isLoading={isLoading}
+                variant="green"
+                icon={TrendingUp}
+                valueClassName="text-emerald-600 dark:text-emerald-400"
+              />
+            </div>
+          )}
         </section>
 
         <section>
           <SectionHeader title="Constraints" icon={ShieldAlert} />
-          <div className="grid gap-4 sm:grid-cols-3">
-            <KpiCard
-              label="Total Constraints"
-              value={stats?.totalConstraints ?? 0}
-              isLoading={isLoading}
-              variant="neutral"
-              icon={ShieldAlert}
-            />
-            <KpiCard
-              label="Open Constraints"
-              value={stats?.openConstraints ?? 0}
-              isLoading={isLoading}
-              variant="amber"
-              icon={ShieldX}
-            />
-            <KpiCard
-              label="Closed Constraints"
-              value={stats?.closedConstraints ?? 0}
-              isLoading={isLoading}
-              variant="green"
-              icon={ShieldCheck}
-            />
-          </div>
-
-          {!isLoading && (stats?.totalConstraints ?? 0) > 0 && (
-            <div className="mt-4 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
-              <div className="mb-3 flex items-center justify-between">
-                <p className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
-                  Constraint Resolution Progress
-                </p>
-                <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
-                  {Math.round(
-                    ((stats?.closedConstraints ?? 0) /
-                      (stats?.totalConstraints ?? 1)) *
-                      100,
-                  )}
-                  % resolved
-                </p>
-              </div>
-              <div className="h-3 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
-                <div
-                  className="h-full rounded-full bg-emerald-500 transition-all duration-700 dark:bg-emerald-400"
-                  style={{
-                    width: `${((stats?.closedConstraints ?? 0) / (stats?.totalConstraints ?? 1)) * 100}%`,
-                  }}
+          {isLoading ? (
+            <div className="grid gap-4 sm:grid-cols-3">
+              <CardSkeleton />
+              <CardSkeleton />
+              <CardSkeleton />
+            </div>
+          ) : (
+            <>
+              <div className="grid gap-4 sm:grid-cols-3">
+                <KpiCard
+                  label="Total Constraints"
+                  value={stats?.totalConstraints ?? 0}
+                  isLoading={isLoading}
+                  variant="neutral"
+                  icon={ShieldAlert}
+                />
+                <KpiCard
+                  label="Open Constraints"
+                  value={stats?.openConstraints ?? 0}
+                  isLoading={isLoading}
+                  variant="amber"
+                  icon={ShieldX}
+                />
+                <KpiCard
+                  label="Closed Constraints"
+                  value={stats?.closedConstraints ?? 0}
+                  isLoading={isLoading}
+                  variant="green"
+                  icon={ShieldCheck}
                 />
               </div>
-              <div className="mt-2 flex justify-between text-xs text-zinc-500 dark:text-zinc-400">
-                <span>● Open: {stats?.openConstraints ?? 0}</span>
-                <span>● Closed: {stats?.closedConstraints ?? 0}</span>
-              </div>
-            </div>
+
+              {(stats?.totalConstraints ?? 0) > 0 && (
+                <div className="mt-4 rounded-xl border border-zinc-200 bg-white p-5 shadow-lg shadow-black/5 dark:border-zinc-200/30 dark:bg-white/95 dark:shadow-2xl dark:shadow-black/40">
+                  <div className="mb-3 flex items-center justify-between">
+                    <p className="text-sm font-semibold text-zinc-700">
+                      Constraint Resolution Progress
+                    </p>
+                    <p className="text-sm font-bold text-emerald-600 dark:text-emerald-700">
+                      {Math.round(
+                        ((stats?.closedConstraints ?? 0) /
+                          (stats?.totalConstraints ?? 1)) *
+                          100,
+                      )}
+                      % resolved
+                    </p>
+                  </div>
+                  <div className="h-3 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-200">
+                    <div
+                      className="h-full rounded-full bg-emerald-500 transition-all duration-700"
+                      style={{
+                        width: `${((stats?.closedConstraints ?? 0) / (stats?.totalConstraints ?? 1)) * 100}%`,
+                      }}
+                    />
+                  </div>
+                  <div className="mt-2 flex justify-between text-xs text-zinc-500">
+                    <span>● Open: {stats?.openConstraints ?? 0}</span>
+                    <span>● Closed: {stats?.closedConstraints ?? 0}</span>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </section>
 
         <section>
           <SectionHeader title="Project Completion" icon={TrendingUp} />
           <div
-            className={`rounded-xl border border-zinc-200 bg-gradient-to-br p-6 shadow-sm dark:border-zinc-800 sm:p-8 ${ppcColors.gradient}`}
+            className={`rounded-2xl border border-zinc-200 bg-gradient-to-br p-6 shadow-lg shadow-black/5 dark:border-zinc-200/30 dark:shadow-2xl dark:shadow-black/40 sm:p-8 ${ppcColors.gradient}`}
           >
-            <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-              Project Completion
-            </h2>
-
             {isLoading ? (
-              <div className="mt-6 flex flex-col gap-6 lg:flex-row lg:items-center">
-                <div className="h-36 w-36 animate-pulse rounded-full bg-zinc-200 dark:bg-zinc-800" />
+              <div className="flex flex-col gap-6 lg:flex-row lg:items-center">
+                <div className="h-44 w-44 animate-pulse rounded-full bg-zinc-200 dark:bg-zinc-800" />
                 <div className="flex-1 space-y-4">
-                  <div className="h-16 w-48 animate-pulse rounded-lg bg-zinc-200 dark:bg-zinc-800" />
-                  <div className="h-3 w-full animate-pulse rounded-full bg-zinc-200 dark:bg-zinc-800" />
-                  <div className="h-4 w-64 animate-pulse rounded bg-zinc-200 dark:bg-zinc-800" />
+                  <div className="h-20 w-56 animate-pulse rounded-2xl bg-zinc-200 dark:bg-zinc-800" />
+                  <div className="h-4 w-full animate-pulse rounded-full bg-zinc-200 dark:bg-zinc-800" />
+                  <div className="h-32 animate-pulse rounded-2xl bg-zinc-200 dark:bg-zinc-800" />
                 </div>
               </div>
             ) : (
-              <div className="mt-6 flex flex-col gap-8 lg:flex-row lg:items-center">
-                <div className="relative flex items-center justify-center">
+              <div className="flex flex-col gap-8 lg:flex-row lg:items-center">
+                <div className="relative flex shrink-0 items-center justify-center">
                   <CircularProgress value={ppc} strokeClass={ppcColors.stroke} />
                   <span
-                    className={`absolute text-2xl font-bold ${ppcColors.text}`}
+                    className={`absolute text-3xl font-black ${ppcColors.text}`}
                   >
                     {ppc.toFixed(1)}%
                   </span>
                 </div>
 
                 <div className="flex-1">
+                  <span
+                    className={`inline-flex rounded-full px-4 py-1.5 text-sm font-semibold ${getPpcPillClasses(ppc)}`}
+                  >
+                    {ppcInterpretation}
+                  </span>
+
+                  <p className="mt-6 text-4xl font-black text-zinc-900">
+                    {stats?.completedActivities ?? 0}
+                    <span className="text-xl font-medium text-zinc-400">
+                      /{stats?.totalActivities ?? 0}
+                    </span>
+                  </p>
+                  <p className="mt-1 text-sm text-zinc-500">
+                    activities completed
+                  </p>
+
                   <p
-                    className={`text-6xl font-bold tracking-tight sm:text-7xl ${ppcColors.text}`}
+                    className={`mt-4 text-3xl font-black tracking-tight sm:text-4xl ${ppcColors.text}`}
                   >
                     {ppc.toFixed(1)}% of activities completed
                   </p>
 
-                  <div className="mt-6 h-3 w-full overflow-hidden rounded-full bg-zinc-200/80 dark:bg-zinc-800">
+                  <div className="mt-6 h-4 w-full overflow-hidden rounded-full bg-zinc-200/80 dark:bg-zinc-200">
                     <div
                       className={`h-full rounded-full transition-all duration-500 ${ppcColors.bar}`}
                       style={{ width: `${Math.min(ppc, 100)}%` }}
                     />
                   </div>
 
-                  <p className="mt-4 text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                    {ppcInterpretation}
-                  </p>
-
-                  <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">
-                    {stats?.completedActivities ?? 0} of{" "}
-                    {stats?.totalActivities ?? 0} activities completed across
-                    the entire project
-                  </p>
-
-                  <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-500">
+                  <p className="mt-4 text-xs text-zinc-500">
                     This shows overall project progress — how many activities
                     are marked complete out of the total. This is different
                     from PPC (Percent Plan Complete), which measures weekly
@@ -1143,22 +1266,22 @@ export default function DashboardPage() {
             )}
 
             {!isLoading && (
-              <div className="mt-6 grid grid-cols-3 gap-4 border-t border-zinc-200 pt-6 dark:border-zinc-800">
+              <div className="mt-6 grid grid-cols-3 gap-4 border-t border-zinc-200 pt-6">
                 <div className="text-center">
-                  <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400">
+                  <p className="text-2xl font-black text-emerald-700 dark:text-emerald-700">
                     {stats?.completedActivities ?? 0}
                   </p>
-                  <p className="mt-1 text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                  <p className="mt-1 text-xs font-medium uppercase tracking-wide text-zinc-500">
                     Completed
                   </p>
                 </div>
 
-                <div className="border-x border-zinc-200 text-center dark:border-zinc-800">
-                  <p className="text-2xl font-black text-blue-600 dark:text-blue-400">
+                <div className="border-x border-zinc-200 text-center">
+                  <p className="text-2xl font-black text-[#2563a8]">
                     {(stats?.totalActivities ?? 0) -
                       (stats?.completedActivities ?? 0)}
                   </p>
-                  <p className="mt-1 text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                  <p className="mt-1 text-xs font-medium uppercase tracking-wide text-zinc-500">
                     Remaining
                   </p>
                 </div>
@@ -1167,13 +1290,13 @@ export default function DashboardPage() {
                   <p
                     className={`text-2xl font-black ${
                       projectedEndVariant === "red"
-                        ? "text-red-600 dark:text-red-400"
-                        : "text-emerald-600 dark:text-emerald-400"
+                        ? "text-red-700"
+                        : "text-emerald-700"
                     }`}
                   >
                     {formatDisplayDate(stats?.projectedEndDate ?? null)}
                   </p>
-                  <p className="mt-1 text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                  <p className="mt-1 text-xs font-medium uppercase tracking-wide text-zinc-500">
                     Forecast End
                   </p>
                 </div>
@@ -1184,38 +1307,51 @@ export default function DashboardPage() {
 
         <section>
           <SectionHeader title="Project Timeline" icon={Calendar} />
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <TimelineCard
-              label="Planned Start"
-              value={formatDisplayDate(stats?.plannedStartDate ?? null)}
-              isLoading={isLoading}
-              variant="neutral"
-            />
-            <TimelineCard
-              label="Planned End"
-              value={formatDisplayDate(stats?.plannedEndDate ?? null)}
-              isLoading={isLoading}
-              variant="neutral"
-            />
-            <TimelineCard
-              label="Projected End Date"
-              value={formatDisplayDate(stats?.projectedEndDate ?? null)}
-              isLoading={isLoading}
-              variant={projectedEndVariant}
-              statusBadge={!isLoading ? projectedEndStatusBadge : undefined}
-            />
-            <TimelineCard
-              label="Net Delay Impact"
-              value={netDelayDisplay.value}
-              subtext={netDelayDisplay.subtext}
-              isLoading={isLoading}
-              variant={netDelayDisplay.variant}
-              schedulePill={netDelaySchedulePill ?? undefined}
-              borderClassName={netDelayBorderClass}
-            />
-          </div>
+          {isLoading ? (
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <CardSkeleton />
+              <CardSkeleton />
+              <CardSkeleton />
+              <CardSkeleton />
+            </div>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <TimelineCard
+                label="Planned Start"
+                value={formatDisplayDate(stats?.plannedStartDate ?? null)}
+                isLoading={isLoading}
+                variant="neutral"
+                icon={Calendar}
+              />
+              <TimelineCard
+                label="Planned End"
+                value={formatDisplayDate(stats?.plannedEndDate ?? null)}
+                isLoading={isLoading}
+                variant="neutral"
+                icon={Calendar}
+              />
+              <TimelineCard
+                label="Projected End Date"
+                value={formatDisplayDate(stats?.projectedEndDate ?? null)}
+                isLoading={isLoading}
+                variant={projectedEndVariant}
+                icon={Calendar}
+                statusBadge={projectedEndStatusBadge}
+              />
+              <TimelineCard
+                label="Net Delay Impact"
+                value={netDelayDisplay.value}
+                subtext={netDelayDisplay.subtext}
+                isLoading={isLoading}
+                variant={netDelayDisplay.variant}
+                icon={Timer}
+                highlight={netDelayHighlight}
+                schedulePill={netDelaySchedulePill}
+              />
+            </div>
+          )}
 
-          <div className="mt-4 rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+          <div className="mt-4 rounded-2xl border border-zinc-200 bg-white p-6 shadow-lg shadow-black/5 dark:border-zinc-200/30 dark:bg-white/95 dark:shadow-2xl dark:shadow-black/40">
             {isLoading ? (
               <div className="space-y-4">
                 <div className="flex justify-between">
@@ -1228,22 +1364,22 @@ export default function DashboardPage() {
             ) : (
               <>
                 <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  <p className="text-sm font-medium text-zinc-700">
                     Planned Duration:{" "}
-                    <span className="font-bold text-blue-600 dark:text-blue-400">
+                    <span className="font-bold text-[#2563a8]">
                       {stats?.plannedDurationDays !== null &&
                       stats?.plannedDurationDays !== undefined
                         ? `${stats.plannedDurationDays} days`
                         : "—"}
                     </span>
                   </p>
-                  <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  <p className="text-sm font-medium text-zinc-700">
                     Projected Duration:{" "}
                     <span
                       className={`font-bold ${
                         projectedDurationLonger
-                          ? "text-red-600 dark:text-red-400"
-                          : "text-emerald-600 dark:text-emerald-400"
+                          ? "text-red-700"
+                          : "text-emerald-700"
                       }`}
                     >
                       {stats?.projectedDurationDays !== null &&
@@ -1254,24 +1390,39 @@ export default function DashboardPage() {
                   </p>
                 </div>
 
-                <div className="space-y-4">
+                {durationDifference !== null && durationDifference !== 0 && (
+                  <p
+                    className={`mb-4 text-sm font-semibold ${
+                      durationDifference > 0 ? "text-red-700" : "text-emerald-700"
+                    }`}
+                  >
+                    {durationDifference > 0
+                      ? `+${durationDifference} days over planned`
+                      : `${Math.abs(durationDifference)} days ahead`}
+                  </p>
+                )}
+
+                <div className="space-y-5">
                   <div>
-                    <div className="mb-2 flex items-center justify-between">
-                      {hasDurationData && (
-                        <span className="rounded bg-zinc-200 px-1.5 py-0.5 text-xs font-bold text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300">
+                    {hasDurationData && (
+                      <div className="mb-2">
+                        <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs font-bold text-zinc-600">
                           BASELINE
                         </span>
-                      )}
-                      <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                      </div>
+                    )}
+                    <div className="mb-2 flex items-center justify-between text-xs text-zinc-500">
+                      <span>Planned</span>
+                      <span>
                         {stats?.plannedDurationDays !== null &&
                         stats?.plannedDurationDays !== undefined
                           ? `${stats.plannedDurationDays} days`
                           : "—"}
                       </span>
                     </div>
-                    <div className="h-4 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+                    <div className="h-4 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-200">
                       <div
-                        className="h-full rounded-full bg-blue-500 transition-all duration-500 dark:bg-blue-400"
+                        className="h-full rounded-full bg-[#54B5FB] transition-all duration-500"
                         style={{
                           width: `${((stats?.plannedDurationDays ?? 0) / durationBarMax) * 100}%`,
                         }}
@@ -1280,33 +1431,38 @@ export default function DashboardPage() {
                   </div>
 
                   <div>
-                    <div className="mb-2 flex items-center justify-between">
-                      {hasDurationData && (
-                        <span
-                          className={`rounded px-1.5 py-0.5 text-xs font-bold ${
-                            projectedDurationLonger
-                              ? "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400"
-                              : "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400"
-                          }`}
-                        >
-                          {projectedDurationLonger
-                            ? `DELAYED +${(stats?.projectedDurationDays ?? 0) - (stats?.plannedDurationDays ?? 0)} days`
-                            : `AHEAD ${(stats?.plannedDurationDays ?? 0) - (stats?.projectedDurationDays ?? 0)} days`}
-                        </span>
-                      )}
-                      <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                    {hasDurationData && (
+                      <div className="mb-2">
+                        {projectedDurationLonger ? (
+                          <span className="rounded bg-red-100 px-1.5 py-0.5 text-xs font-bold text-red-700">
+                            DELAYED +
+                            {(stats?.projectedDurationDays ?? 0) -
+                              (stats?.plannedDurationDays ?? 0)}{" "}
+                            days
+                          </span>
+                        ) : (
+                          <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-xs font-bold text-emerald-700">
+                            AHEAD{" "}
+                            {(stats?.plannedDurationDays ?? 0) -
+                              (stats?.projectedDurationDays ?? 0)}{" "}
+                            days
+                          </span>
+                        )}
+                      </div>
+                    )}
+                    <div className="mb-2 flex items-center justify-between text-xs text-zinc-500">
+                      <span>Projected</span>
+                      <span>
                         {stats?.projectedDurationDays !== null &&
                         stats?.projectedDurationDays !== undefined
                           ? `${stats.projectedDurationDays} days`
                           : "—"}
                       </span>
                     </div>
-                    <div className="h-4 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+                    <div className="h-4 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-200">
                       <div
                         className={`h-full rounded-full transition-all duration-500 ${
-                          projectedDurationLonger
-                            ? "bg-red-500 dark:bg-red-400"
-                            : "bg-emerald-500 dark:bg-emerald-400"
+                          projectedDurationLonger ? "bg-red-500" : "bg-emerald-500"
                         }`}
                         style={{
                           width: `${((stats?.projectedDurationDays ?? 0) / durationBarMax) * 100}%`,

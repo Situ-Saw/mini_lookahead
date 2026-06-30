@@ -3,9 +3,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ChevronDown, Loader2, RefreshCw } from "lucide-react";
-import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import { useActiveProject } from "@/lib/hooks/useActiveProject";
+import { useCurrentUser } from "@/lib/contexts/UserContext";
 
 type PlanningSession = {
   id: string;
@@ -116,14 +116,16 @@ function StatusBadge({
   const category = getStatusCategory(status, wasCompleted);
   const label = getStatusLabel(category, status);
 
+  // White-pill style: brand-coloured text on white bg, no solid fill
+  // Cards are white in both modes so no dark: variants needed here
   const className =
     category === "not_started"
-      ? "bg-zinc-100 text-zinc-700 ring-zinc-200 dark:bg-zinc-800 dark:text-zinc-200 dark:ring-zinc-700"
+      ? "bg-white text-zinc-600 shadow-sm ring-zinc-200"
       : category === "in_progress"
-        ? "bg-blue-100 text-blue-800 ring-blue-200 dark:bg-blue-950/50 dark:text-blue-200 dark:ring-blue-900"
+        ? "bg-white text-[#2563a8] shadow-sm ring-[#54B5FB]/40"
         : category === "completed"
-          ? "bg-emerald-100 text-emerald-800 ring-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-200 dark:ring-emerald-900"
-          : "bg-zinc-100 text-zinc-700 ring-zinc-200 dark:bg-zinc-800 dark:text-zinc-200 dark:ring-zinc-700";
+          ? "bg-white text-[#4a9b3f] shadow-sm ring-[#A6DBA0]/60"
+          : "bg-white text-zinc-600 shadow-sm ring-zinc-200";
 
   return (
     <span
@@ -135,13 +137,15 @@ function StatusBadge({
 }
 
 function getCardBorderClass(category: StatusCategory): string {
+  // Brand palette: sage #A6DBA0 = completed, blue #54B5FB = in-progress, teal #359FAB = default
+  // Cards are white in both light and dark mode, so no dark: variant needed on the accent border
   switch (category) {
     case "completed":
-      return "border-l-emerald-500 dark:border-l-emerald-400";
+      return "border-l-[#A6DBA0]";
     case "in_progress":
-      return "border-l-blue-500 dark:border-l-blue-400";
+      return "border-l-[#54B5FB]";
     default:
-      return "border-l-zinc-400 dark:border-l-zinc-500";
+      return "border-l-[#359FAB]";
   }
 }
 
@@ -324,24 +328,26 @@ function ActivityCard({
 
   return (
     <article
-      className={`rounded-xl border border-zinc-200 border-l-4 bg-white p-4 shadow-sm transition-colors dark:border-zinc-800 dark:bg-zinc-950 ${borderClass} ${
-        isCompleted ? "opacity-75" : ""
-      }`}
+      className={`rounded-xl border border-zinc-200 border-l-4 bg-white p-4 shadow-lg shadow-black/5 transition-colors dark:border-zinc-200/30 dark:shadow-2xl dark:shadow-black/40 ${
+        isCompleted
+          ? "dark:bg-white/80" // slightly dimmed for completed — via bg opacity, not element opacity
+          : "dark:bg-white/95"
+      } ${borderClass}`}
     >
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 flex-1 space-y-1">
-          <p className="font-mono text-xs text-zinc-500 dark:text-zinc-400">
+          <p className="font-mono text-xs text-zinc-500 dark:text-zinc-500">
             {activity.activity_id}
           </p>
-          <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
+          <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-900">
             {activity.activity_name}
           </h3>
           {showAssignedLine && (
             <p
               className={
                 activity.assignedName
-                  ? "text-xs text-zinc-500 dark:text-zinc-400"
-                  : "text-xs text-amber-600 dark:text-amber-400"
+                  ? "text-xs text-zinc-500 dark:text-zinc-500"
+                  : "text-xs text-amber-600 dark:text-amber-600"
               }
             >
               {activity.assignedName
@@ -349,17 +355,17 @@ function ActivityCard({
                 : "Unassigned"}
             </p>
           )}
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+          <p className="text-xs text-zinc-500 dark:text-zinc-500">
             WBS: {activity.wbs_code ?? "—"}
           </p>
         </div>
 
         <div className="flex shrink-0 flex-col items-start gap-3 sm:items-end">
           <div className="text-left sm:text-right">
-            <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+            <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-500">
               Planned Finish
             </p>
-            <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+            <p className="text-sm font-medium text-zinc-900 dark:text-zinc-900">
               {formatDate(activity.finish_date)}
             </p>
           </div>
@@ -367,13 +373,13 @@ function ActivityCard({
           <div className="flex flex-col items-start gap-2 sm:items-end">
             {isBlocked ? (
               <>
-                <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-1 text-xs font-medium text-red-800 ring-1 ring-inset ring-red-200 dark:bg-red-950/50 dark:text-red-200 dark:ring-red-900">
+                <span className="inline-flex items-center rounded-full bg-white px-2.5 py-1 text-xs font-medium text-red-700 shadow-sm ring-1 ring-inset ring-red-300">
                   ⚠ Not Ready
                 </span>
                 <button
                   type="button"
                   onClick={() => setShowReasons((current) => !current)}
-                  className="text-xs font-medium text-red-700 underline-offset-2 hover:underline dark:text-red-300"
+                  className="text-xs font-medium text-red-700 underline-offset-2 hover:underline dark:text-red-700"
                 >
                   {showReasons ? "Hide reasons" : "Show reasons"}
                 </button>
@@ -382,16 +388,16 @@ function ActivityCard({
                     {openConstraints.map((constraint) => (
                       <li
                         key={constraint.id}
-                        className="rounded-lg border border-red-100 bg-red-50/50 px-3 py-2 text-left dark:border-red-900/40 dark:bg-red-950/20"
+                        className="rounded-lg border border-red-100 bg-red-50/50 px-3 py-2 text-left"
                       >
-                        <p className="text-xs font-semibold text-red-900 dark:text-red-200">
+                        <p className="text-xs font-semibold text-red-900 dark:text-red-900">
                           {constraint.constraint_type}
                         </p>
-                        <p className="truncate text-xs text-zinc-600 dark:text-zinc-400">
+                        <p className="truncate text-xs text-zinc-600 dark:text-zinc-600">
                           {constraint.description}
                         </p>
                         {constraint.target_removal_date && (
-                          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-500">
                             Due: {formatDate(constraint.target_removal_date)}
                           </p>
                         )}
@@ -401,7 +407,7 @@ function ActivityCard({
                 )}
               </>
             ) : (
-              <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-800 ring-1 ring-inset ring-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-200 dark:ring-emerald-900">
+              <span className="inline-flex items-center rounded-full bg-white px-2.5 py-1 text-xs font-medium text-[#4a9b3f] shadow-sm ring-1 ring-inset ring-[#A6DBA0]/60">
                 ✓ Ready
               </span>
             )}
@@ -419,6 +425,13 @@ function ActivityCard({
 
 export default function LookaheadPage() {
   const { activeProject, isLoading: isProjectLoading } = useActiveProject();
+  const {
+    user: currentUser,
+    projectRole: currentRole,
+    isLoading: isUserContextLoading,
+    isProjectRoleLoading,
+  } = useCurrentUser();
+  const isRoleLoading = isUserContextLoading || isProjectRoleLoading;
   const [activeSession, setActiveSession] = useState<PlanningSession | null>(
     null,
   );
@@ -431,79 +444,11 @@ export default function LookaheadPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [currentRole, setCurrentRole] = useState<string | null>(null);
-  const [isRoleLoading, setIsRoleLoading] = useState(true);
   const [viewerEngineerMissing, setViewerEngineerMissing] = useState(false);
 
   useEffect(() => {
     document.title = "Look Ahead";
   }, []);
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    if (!activeProject) {
-      setIsRoleLoading(false);
-      return;
-    }
-
-    const projectId = activeProject.id;
-    let cancelled = false;
-
-    async function loadRole() {
-      try {
-        const {
-          data: { user: authUser },
-          error: authError,
-        } = await supabase.auth.getUser();
-
-        if (authError || !authUser) {
-          if (authError) {
-            console.error("Failed to get current user:", authError.message);
-          }
-          if (!cancelled) {
-            setCurrentUser(null);
-            setCurrentRole("viewer");
-            setIsRoleLoading(false);
-          }
-          return;
-        }
-
-        const { data: memberRow, error: memberError } = await supabase
-          .from("project_members")
-          .select("role")
-          .eq("user_id", authUser.id)
-          .eq("project_id", projectId)
-          .maybeSingle();
-
-        if (memberError) {
-          throw new Error(memberError.message);
-        }
-
-        if (!cancelled) {
-          setCurrentUser(authUser);
-          setCurrentRole(memberRow?.role ?? "viewer");
-          setIsRoleLoading(false);
-        }
-      } catch (error) {
-        console.error("Failed to load user role:", error);
-        if (!cancelled) {
-          setCurrentUser(null);
-          setCurrentRole("viewer");
-          setIsRoleLoading(false);
-        }
-      }
-    }
-
-    void loadRole();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [activeProject]);
 
   const showAssignedLine =
     currentRole === "admin" || currentRole === "planner";
@@ -737,30 +682,44 @@ export default function LookaheadPage() {
 
   if (isProjectLoading) {
     return (
-      <main className="mx-auto flex min-h-[50vh] w-full max-w-7xl items-center justify-center p-6 sm:p-10">
-        <Loader2
-          className="h-8 w-8 animate-spin text-zinc-400"
-          aria-label="Loading project"
+      <main className="relative w-full flex-1 bg-gradient-to-br from-[#e8f6f7] via-[#eaf4ff] to-[#f0f9ed] dark:bg-none dark:bg-[#0a1420]">
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 hidden dark:block"
+          style={{ background: "radial-gradient(circle at 30% 20%, rgba(53,159,171,0.3) 0%, transparent 50%), radial-gradient(circle at 80% 80%, rgba(84,181,251,0.25) 0%, transparent 50%)" }}
         />
+        <div className="relative flex min-h-[50vh] items-center justify-center p-6 sm:p-10">
+          <Loader2
+            className="h-8 w-8 animate-spin text-[#359FAB] dark:text-[#54B5FB]"
+            aria-label="Loading project"
+          />
+        </div>
       </main>
     );
   }
 
   if (!activeProject) {
     return (
-      <main className="mx-auto w-full max-w-7xl flex-1 p-6 sm:p-10">
-        <div className="rounded-xl border border-zinc-200 bg-white p-8 text-center dark:border-zinc-800 dark:bg-zinc-950">
-          <p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
-            No project selected.
-            <br />
-            Please select a project to continue.
-          </p>
-          <Link
-            href="/select-project"
-            className="mt-4 inline-flex rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
-          >
-            Select Project
-          </Link>
+      <main className="relative w-full flex-1 bg-gradient-to-br from-[#e8f6f7] via-[#eaf4ff] to-[#f0f9ed] dark:bg-none dark:bg-[#0a1420]">
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 hidden dark:block"
+          style={{ background: "radial-gradient(circle at 30% 20%, rgba(53,159,171,0.3) 0%, transparent 50%), radial-gradient(circle at 80% 80%, rgba(84,181,251,0.25) 0%, transparent 50%)" }}
+        />
+        <div className="relative mx-auto max-w-7xl p-6 sm:p-10">
+          <div className="rounded-xl border border-zinc-200 bg-white p-8 text-center shadow-lg shadow-black/5 dark:border-zinc-200/30 dark:bg-white/95 dark:shadow-2xl dark:shadow-black/40">
+            <p className="text-sm leading-relaxed text-zinc-600">
+              No project selected.
+              <br />
+              Please select a project to continue.
+            </p>
+            <Link
+              href="/select-project"
+              className="mt-4 inline-flex rounded-lg bg-[#0a1420] px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-zinc-800"
+            >
+              Select Project
+            </Link>
+          </div>
         </div>
       </main>
     );
@@ -768,26 +727,40 @@ export default function LookaheadPage() {
 
   if (fetchError && !isLoading && !activeSession && activities.length === 0) {
     return (
-      <main className="mx-auto w-full max-w-7xl flex-1 p-6 sm:p-10">
-        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
-          Look Ahead
-        </h1>
-        <p className="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
-          Failed to load look ahead data: {fetchError}
-        </p>
+      <main className="relative w-full flex-1 bg-gradient-to-br from-[#e8f6f7] via-[#eaf4ff] to-[#f0f9ed] dark:bg-none dark:bg-[#0a1420]">
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 hidden dark:block"
+          style={{ background: "radial-gradient(circle at 30% 20%, rgba(53,159,171,0.3) 0%, transparent 50%), radial-gradient(circle at 80% 80%, rgba(84,181,251,0.25) 0%, transparent 50%)" }}
+        />
+        <div className="relative mx-auto max-w-7xl p-6 sm:p-10">
+          <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-white sm:text-3xl">
+            Look Ahead
+          </h1>
+          <p className="mt-6 rounded-lg border border-red-200 border-l-4 border-l-red-500 bg-white px-4 py-3 text-sm text-red-800 shadow-lg shadow-red-500/10 dark:bg-white/95">
+            Failed to load look ahead data: {fetchError}
+          </p>
+        </div>
       </main>
     );
   }
 
   return (
-    <main className="mx-auto w-full max-w-7xl flex-1 p-6 sm:p-10">
+    <main className="relative w-full flex-1 bg-gradient-to-br from-[#e8f6f7] via-[#eaf4ff] to-[#f0f9ed] dark:bg-none dark:bg-[#0a1420]">
+      {/* Dark mode ambient glow — hidden in light mode */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 hidden dark:block"
+        style={{ background: "radial-gradient(circle at 30% 20%, rgba(53,159,171,0.3) 0%, transparent 50%), radial-gradient(circle at 80% 80%, rgba(84,181,251,0.25) 0%, transparent 50%)" }}
+      />
+      <div className="relative mx-auto max-w-7xl p-6 sm:p-10">
       <div className="mb-8">
-        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
+        <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-white sm:text-3xl">
           Look Ahead
         </h1>
 
         <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-          <span className="inline-flex items-center rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+          <span className="inline-flex items-center rounded-full bg-white/70 px-2.5 py-0.5 text-xs font-medium text-[#287a83] shadow-sm ring-1 ring-[#359FAB]/30 dark:bg-zinc-800 dark:text-zinc-300 dark:ring-0">
             {activeProject.code} — {activeProject.name}
           </span>
         </p>
@@ -807,18 +780,18 @@ export default function LookaheadPage() {
       </div>
 
       {fetchError && (
-        <p className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
+        <p className="mb-6 rounded-lg border border-red-200 border-l-4 border-l-red-500 bg-white px-4 py-3 text-sm text-red-800 shadow-lg shadow-red-500/10 dark:bg-white/95">
           {fetchError}
         </p>
       )}
 
       {isLoading || isRoleLoading ? (
-        <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-12 text-center text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-400">
+        <div className="rounded-xl border border-zinc-200 bg-white px-4 py-12 text-center text-sm text-zinc-600 shadow-lg shadow-black/5 dark:border-zinc-200/30 dark:bg-white/95 dark:shadow-2xl dark:shadow-black/40">
           Loading look ahead data...
         </div>
       ) : !activeSession ? (
-        <div className="mx-auto max-w-lg rounded-xl border border-zinc-200 bg-white px-8 py-12 text-center shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
-          <p className="text-sm text-zinc-700 dark:text-zinc-300">
+        <div className="mx-auto max-w-lg rounded-xl border border-zinc-200 bg-white px-8 py-12 text-center shadow-lg shadow-black/5 dark:border-zinc-200/30 dark:bg-white/95 dark:shadow-2xl dark:shadow-black/40">
+          <p className="text-sm text-zinc-700">
             No tasks scheduled for this week. Check back later or ask your
             supervisor for the latest work plan.
           </p>
@@ -826,29 +799,32 @@ export default function LookaheadPage() {
       ) : (
         <>
           <div className="mb-8 grid gap-4 sm:grid-cols-3">
-            <div className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
-              <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
+            {/* Total Activities — neutral teal accent in dark */}
+            <div className="rounded-xl border border-zinc-200 bg-white p-5 shadow-lg shadow-black/5 dark:border-l-4 dark:border-l-[#359FAB] dark:border-zinc-200/30 dark:bg-white/95 dark:shadow-2xl dark:shadow-black/40">
+              <p className="text-sm font-medium text-zinc-500">
                 Total Activities
               </p>
-              <p className="mt-2 text-3xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
+              <p className="mt-2 text-3xl font-bold tracking-tight text-zinc-900">
                 {activities.length.toLocaleString()}
               </p>
             </div>
 
-            <div className="rounded-xl border border-blue-200 bg-blue-50 p-5 shadow-sm dark:border-blue-900/50 dark:bg-blue-950/30">
-              <p className="text-sm font-medium text-blue-700 dark:text-blue-300">
+            {/* Remaining Activities — blue #54B5FB accent */}
+            <div className="rounded-xl border border-[#54B5FB]/30 border-l-4 border-l-[#54B5FB] bg-white p-5 shadow-lg shadow-[#54B5FB]/15 dark:border-zinc-200/30 dark:bg-white/95 dark:shadow-2xl dark:shadow-black/40">
+              <p className="text-sm font-medium text-slate-500">
                 Remaining Activities
               </p>
-              <p className="mt-2 text-3xl font-bold tracking-tight text-blue-900 dark:text-blue-100">
+              <p className="mt-2 text-3xl font-bold tracking-tight text-[#2563a8]">
                 {remainingCount.toLocaleString()}
               </p>
             </div>
 
-            <div className="rounded-xl border border-red-200 bg-red-50 p-5 shadow-sm dark:border-red-900/50 dark:bg-red-950/30">
-              <p className="text-sm font-medium text-red-700 dark:text-red-300">
+            {/* Blocked Activities — red accent */}
+            <div className="rounded-xl border border-red-200 border-l-4 border-l-red-500 bg-white p-5 shadow-lg shadow-red-500/10 dark:border-zinc-200/30 dark:bg-white/95 dark:shadow-2xl dark:shadow-black/40">
+              <p className="text-sm font-medium text-slate-500">
                 Blocked Activities
               </p>
-              <p className="mt-2 text-3xl font-bold tracking-tight text-red-900 dark:text-red-100">
+              <p className="mt-2 text-3xl font-bold tracking-tight text-red-700">
                 {blockedCount.toLocaleString()}
               </p>
             </div>
@@ -860,8 +836,8 @@ export default function LookaheadPage() {
               onClick={() => setShowBlockedOnly((current) => !current)}
               className={`inline-flex items-center justify-center rounded-lg px-4 py-2.5 text-sm font-medium transition-colors ${
                 showBlockedOnly
-                  ? "bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
-                  : "border border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
+                  ? "bg-[#0a1420] text-white hover:bg-zinc-800 dark:bg-zinc-900 dark:text-white dark:hover:bg-zinc-800"
+                  : "border border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-200/40 dark:bg-white/90 dark:text-zinc-700 dark:hover:bg-white"
               }`}
             >
               Show blocked only
@@ -870,7 +846,7 @@ export default function LookaheadPage() {
               type="button"
               onClick={() => void loadData({ isRefresh: true })}
               disabled={isRefreshing}
-              className="inline-flex items-center justify-center gap-2 rounded-lg border border-zinc-300 bg-white px-4 py-2.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
+              className="inline-flex items-center justify-center gap-2 rounded-lg border border-zinc-300 bg-white px-4 py-2.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-200/40 dark:bg-white/90 dark:text-zinc-700 dark:hover:bg-white"
             >
               <RefreshCw
                 className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`}
@@ -881,7 +857,7 @@ export default function LookaheadPage() {
           </div>
 
           {activities.length === 0 ? (
-            <p className="rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-8 text-center text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-400">
+            <p className="rounded-lg border border-zinc-200 bg-white px-4 py-8 text-center text-sm text-zinc-600 shadow-lg shadow-black/5 dark:border-zinc-200/30 dark:bg-white/95 dark:shadow-2xl dark:shadow-black/40">
               {viewerEngineerMissing
                 ? "No engineer assigned to your account yet."
                 : currentRole === "site_engineer"
@@ -889,28 +865,28 @@ export default function LookaheadPage() {
                   : "No tasks assigned yet. Ask your supervisor to update the weekly work plan."}
             </p>
           ) : visibleActivities.length === 0 ? (
-            <p className="rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-8 text-center text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-400">
+            <p className="rounded-lg border border-zinc-200 bg-white px-4 py-8 text-center text-sm text-zinc-600 shadow-lg shadow-black/5 dark:border-zinc-200/30 dark:bg-white/95 dark:shadow-2xl dark:shadow-black/40">
               No blocked activities in this session.
             </p>
           ) : (
             <div className="space-y-8">
               <section>
                 <div
-                  className="flex items-center justify-between rounded-xl border border-amber-200 bg-amber-50 px-5 py-3 dark:border-amber-900/50 dark:bg-amber-950/30"
+                  className="flex items-center justify-between rounded-xl border border-[#54B5FB]/30 border-l-4 border-l-[#54B5FB] bg-white px-5 py-3 shadow-lg shadow-[#54B5FB]/15 dark:border-zinc-200/30 dark:bg-white/95 dark:shadow-2xl dark:shadow-black/40"
                 >
                   <div className="flex items-center gap-3">
-                    <span className="h-2.5 w-2.5 rounded-full bg-amber-500" />
-                    <span className="text-sm font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
+                    <span className="h-2.5 w-2.5 rounded-full bg-[#54B5FB]" />
+                    <span className="text-sm font-semibold uppercase tracking-wide text-[#2563a8]">
                       Remaining
                     </span>
-                    <span className="rounded-full bg-amber-200 px-2.5 py-0.5 text-xs font-bold text-amber-800 dark:bg-amber-900 dark:text-amber-200">
+                    <span className="rounded-full bg-[#54B5FB]/15 px-2.5 py-0.5 text-xs font-bold text-[#2563a8]">
                       {notCompletedActivities.length}
                     </span>
                   </div>
                 </div>
 
                 {notCompletedActivities.length === 0 ? (
-                  <p className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-6 text-center text-sm text-emerald-800 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-200">
+                  <p className="mt-4 rounded-lg border border-[#A6DBA0]/40 border-l-4 border-l-[#A6DBA0] bg-white px-4 py-6 text-center text-sm font-medium text-[#4a9b3f] shadow-lg shadow-[#A6DBA0]/20 dark:border-zinc-200/30 dark:bg-white/95 dark:shadow-2xl dark:shadow-black/40">
                     All activities completed! 🎉
                   </p>
                 ) : (
@@ -934,19 +910,19 @@ export default function LookaheadPage() {
                   <button
                     type="button"
                     onClick={() => setShowCompleted((prev) => !prev)}
-                    className="flex w-full items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-5 py-3 text-left transition-colors hover:bg-emerald-100 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:hover:bg-emerald-950/50"
+                    className="flex w-full items-center justify-between rounded-xl border border-[#A6DBA0]/40 border-l-4 border-l-[#A6DBA0] bg-white px-5 py-3 text-left shadow-lg shadow-[#A6DBA0]/20 transition-colors hover:bg-[#A6DBA0]/5 dark:border-zinc-200/30 dark:bg-white/95 dark:shadow-2xl dark:shadow-black/40 dark:hover:bg-[#A6DBA0]/5"
                   >
                     <div className="flex items-center gap-3">
-                      <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
-                      <span className="text-sm font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
+                      <span className="h-2.5 w-2.5 rounded-full bg-[#A6DBA0]" />
+                      <span className="text-sm font-semibold uppercase tracking-wide text-[#4a9b3f]">
                         Completed
                       </span>
-                      <span className="rounded-full bg-emerald-200 px-2.5 py-0.5 text-xs font-bold text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200">
+                      <span className="rounded-full bg-[#A6DBA0]/20 px-2.5 py-0.5 text-xs font-bold text-[#4a9b3f]">
                         {completedActivities.length}
                       </span>
                     </div>
                     <ChevronDown
-                      className={`h-4 w-4 text-emerald-600 transition-transform duration-200 dark:text-emerald-400 ${
+                      className={`h-4 w-4 text-[#4a9b3f] transition-transform duration-200 ${
                         showCompleted ? "rotate-180" : ""
                       }`}
                       aria-hidden="true"
@@ -954,11 +930,11 @@ export default function LookaheadPage() {
                   </button>
 
                   {showCompleted && (
-                    <div className="mt-3 space-y-3 border-t border-emerald-100 pt-3 dark:border-emerald-900/30">
+                    <div className="mt-3 space-y-3 border-t border-[#A6DBA0]/30 pt-3">
                       {completedActivities.map((activity) => (
                         <div
                           key={activity.activity_id}
-                          className="opacity-70 [&>article]:border-l-emerald-500"
+                          className="opacity-70 dark:opacity-100"
                         >
                           <ActivityCard
                             activity={activity}
@@ -977,6 +953,7 @@ export default function LookaheadPage() {
           )}
         </>
       )}
+      </div>
     </main>
   );
 }

@@ -6,6 +6,49 @@ import { Loader2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useActiveProject } from "@/lib/hooks/useActiveProject";
 
+const CONSTRAINTS_PAGE_BG_CLASS =
+  "relative min-h-full w-full bg-gradient-to-br from-[#e8f6f7] via-[#eaf4ff] to-[#f0f9ed] dark:bg-none dark:bg-[#0a1420]";
+
+const CONSTRAINTS_CARD_BASE =
+  "rounded-xl border border-zinc-200 bg-white shadow-lg dark:border-zinc-200/30 dark:bg-white/95 dark:shadow-xl dark:shadow-black/30";
+
+const CONSTRAINTS_TEAL_CARD_CLASS = `${CONSTRAINTS_CARD_BASE} border-l-4 border-l-[#359FAB] shadow-black/5`;
+
+const CONSTRAINTS_AMBER_CARD_CLASS = `${CONSTRAINTS_CARD_BASE} border-l-4 border-l-amber-500 shadow-amber-500/10`;
+
+const CONSTRAINTS_EMERALD_CARD_CLASS = `${CONSTRAINTS_CARD_BASE} border-l-4 border-l-emerald-500 shadow-emerald-500/10`;
+
+const CONSTRAINTS_TABLE_CARD_CLASS =
+  "w-full overflow-x-auto rounded-xl border border-zinc-200 border-l-4 border-l-[#54B5FB] bg-white shadow-lg shadow-[#54B5FB]/15 dark:border-zinc-200/30 dark:bg-white/95 dark:shadow-xl dark:shadow-black/30";
+
+const CONSTRAINTS_FORM_FIELD_CLASS =
+  "w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:opacity-50 dark:border-zinc-200 dark:bg-white dark:text-zinc-900";
+
+const CONSTRAINTS_FORM_FIELD_DISABLED_CLASS =
+  "w-full rounded-lg border border-zinc-300 bg-zinc-50 px-3 py-2 text-sm text-zinc-500 shadow-sm outline-none disabled:cursor-not-allowed disabled:opacity-100 dark:border-zinc-200 dark:bg-zinc-100 dark:text-zinc-500";
+
+function ConstraintsPageShell({
+  children,
+  contentClassName = "relative mx-auto w-full max-w-7xl flex-1 p-6 sm:p-10",
+}: {
+  children: React.ReactNode;
+  contentClassName?: string;
+}) {
+  return (
+    <main className={CONSTRAINTS_PAGE_BG_CLASS}>
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 hidden dark:block"
+        style={{
+          background:
+            "radial-gradient(circle at 30% 20%, rgba(53,159,171,0.3) 0%, transparent 50%), radial-gradient(circle at 80% 80%, rgba(84,181,251,0.25) 0%, transparent 50%)",
+        }}
+      />
+      <div className={contentClassName}>{children}</div>
+    </main>
+  );
+}
+
 const CONSTRAINT_TYPES = [
   "Drawing",
   "Material",
@@ -69,8 +112,7 @@ type ActivityOption = {
   activity_name: string;
 };
 
-const ACTIVITY_FIELD_INPUT_CLASS =
-  "w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100";
+const ACTIVITY_FIELD_INPUT_CLASS = CONSTRAINTS_FORM_FIELD_CLASS;
 
 function formatDate(value: string | null): string {
   if (!value) return "—";
@@ -215,8 +257,8 @@ function FilterButton({
       onClick={onClick}
       className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
         isActive
-          ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
-          : "bg-white text-zinc-700 ring-1 ring-zinc-200 hover:bg-zinc-50 dark:bg-zinc-950 dark:text-zinc-200 dark:ring-zinc-700 dark:hover:bg-zinc-900"
+          ? "bg-zinc-900 text-white dark:bg-zinc-900 dark:text-white"
+          : "bg-white text-zinc-700 ring-1 ring-zinc-200 hover:bg-zinc-50 dark:bg-white/90 dark:text-zinc-700 dark:ring-zinc-200 dark:hover:bg-white"
       }`}
     >
       {label}
@@ -328,7 +370,7 @@ function ActivityIdField({
     <div>
       <label
         htmlFor="constraint-activity-id"
-        className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+        className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-500"
       >
         Activity ID
       </label>
@@ -388,21 +430,21 @@ function ActivityIdField({
             <ul
               id="constraint-activity-listbox"
               role="listbox"
-              className="absolute z-20 mt-1 max-h-48 w-full overflow-y-auto rounded-lg border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
+              className="absolute z-20 mt-1 max-h-48 w-full overflow-y-auto rounded-lg border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-200 dark:bg-white"
             >
               <li>
                 <button
                   type="button"
                   role="option"
                   onClick={() => handleSelect("")}
-                  className="w-full px-3 py-2 text-left text-sm text-zinc-600 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                  className="w-full px-3 py-2 text-left text-sm text-zinc-600 hover:bg-zinc-50 dark:text-zinc-500 dark:hover:bg-zinc-50"
                 >
                   No activity link
                 </button>
               </li>
 
               {filteredActivities.length === 0 ? (
-                <li className="px-3 py-2 text-sm text-zinc-500 dark:text-zinc-400">
+                <li className="px-3 py-2 text-sm text-zinc-500 dark:text-zinc-500">
                   No matching activities
                 </li>
               ) : (
@@ -413,10 +455,10 @@ function ActivityIdField({
                       role="option"
                       aria-selected={value === activity.activity_id}
                       onClick={() => handleSelect(activity.activity_id)}
-                      className={`w-full px-3 py-2 text-left text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800 ${
+                      className={`w-full px-3 py-2 text-left text-sm hover:bg-zinc-50 dark:hover:bg-zinc-50 ${
                         value === activity.activity_id
-                          ? "bg-blue-50 font-medium text-blue-900 dark:bg-blue-950/40 dark:text-blue-100"
-                          : "text-zinc-900 dark:text-zinc-100"
+                          ? "bg-blue-50 font-medium text-blue-900 dark:bg-blue-50 dark:text-blue-900"
+                          : "text-zinc-900 dark:text-zinc-900"
                       }`}
                     >
                       {formatActivityOption(activity)}
@@ -480,11 +522,11 @@ function ConstraintModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="constraint-modal-title"
-        className="relative z-10 max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-zinc-200 bg-white p-6 shadow-xl dark:border-zinc-800 dark:bg-zinc-950"
+        className="relative z-10 max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-zinc-200 bg-white p-6 shadow-xl dark:border-zinc-200/30 dark:bg-white/95"
       >
         <h2
           id="constraint-modal-title"
-          className="text-lg font-semibold text-zinc-900 dark:text-zinc-100"
+          className="text-lg font-semibold text-zinc-900 dark:text-zinc-900"
         >
           {mode === "add" ? "Add Constraint" : "Edit Constraint"}
         </h2>
@@ -500,7 +542,7 @@ function ConstraintModal({
           <div>
             <label
               htmlFor="constraint-type"
-              className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+              className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-500"
             >
               Constraint Type <span className="text-red-500">*</span>
             </label>
@@ -511,7 +553,7 @@ function ConstraintModal({
               onChange={(event) =>
                 onChange({ constraint_type: event.target.value })
               }
-              className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+              className={CONSTRAINTS_FORM_FIELD_CLASS}
             >
               {CONSTRAINT_TYPES.map((type) => (
                 <option key={type} value={type}>
@@ -524,7 +566,7 @@ function ConstraintModal({
           <div>
             <label
               htmlFor="constraint-description"
-              className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+              className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-500"
             >
               Description <span className="text-red-500">*</span>
             </label>
@@ -534,14 +576,14 @@ function ConstraintModal({
               disabled={isSaving}
               onChange={(event) => onChange({ description: event.target.value })}
               rows={3}
-              className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+              className={CONSTRAINTS_FORM_FIELD_CLASS}
             />
           </div>
 
           <div>
             <label
               htmlFor="constraint-status"
-              className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+              className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-500"
             >
               Status
             </label>
@@ -554,7 +596,7 @@ function ConstraintModal({
                   status: event.target.value as ConstraintStatus,
                 })
               }
-              className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+              className={CONSTRAINTS_FORM_FIELD_CLASS}
             >
               {STATUS_OPTIONS.map((status) => (
                 <option key={status} value={status}>
@@ -567,7 +609,7 @@ function ConstraintModal({
           <div>
             <label
               htmlFor="constraint-target-date"
-              className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+              className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-500"
             >
               Target Removal Date
             </label>
@@ -579,14 +621,14 @@ function ConstraintModal({
               onChange={(event) =>
                 onChange({ target_removal_date: event.target.value })
               }
-              className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+              className={CONSTRAINTS_FORM_FIELD_CLASS}
             />
           </div>
 
           <div>
             <label
               htmlFor="constraint-assigned-to"
-              className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+              className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-500"
             >
               Assigned To
               <span className="ml-1 text-xs font-normal text-zinc-500 dark:text-zinc-400">
@@ -600,7 +642,7 @@ function ConstraintModal({
               onChange={(event) =>
                 onChange({ assigned_to: event.target.value })
               }
-              className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+              className={CONSTRAINTS_FORM_FIELD_CLASS}
             >
               <option value="">Unassigned</option>
               {projectMembers.map((member) => (
@@ -614,7 +656,7 @@ function ConstraintModal({
           <div>
             <label
               htmlFor="constraint-raised-by"
-              className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+              className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-500"
             >
               Raised By
             </label>
@@ -624,9 +666,9 @@ function ConstraintModal({
               value={form.raised_by}
               disabled
               placeholder="Optional"
-              className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+              className={CONSTRAINTS_FORM_FIELD_DISABLED_CLASS}
             />
-            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-500">
               Auto-filled from your account. Cannot be changed.
             </p>
           </div>
@@ -634,7 +676,7 @@ function ConstraintModal({
           <div>
             <label
               htmlFor="constraint-remarks"
-              className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+              className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-500"
             >
               Remarks
             </label>
@@ -645,20 +687,20 @@ function ConstraintModal({
               onChange={(event) => onChange({ remarks: event.target.value })}
               rows={2}
               placeholder="Optional"
-              className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+              className={CONSTRAINTS_FORM_FIELD_CLASS}
             />
           </div>
 
           {mode === "edit" && editingConstraint && (
-            <div className="rounded-lg bg-zinc-50 px-4 py-3 text-sm dark:bg-zinc-900/60">
-              <p className="text-zinc-600 dark:text-zinc-400">
-                <span className="font-medium text-zinc-700 dark:text-zinc-300">
+            <div className="rounded-lg bg-zinc-50 px-4 py-3 text-sm dark:border dark:border-zinc-200 dark:bg-zinc-50">
+              <p className="text-zinc-600 dark:text-zinc-500">
+                <span className="font-medium text-zinc-700 dark:text-zinc-900">
                   Created At:
                 </span>{" "}
                 {formatDateTime(editingConstraint.created_at)}
               </p>
-              <p className="mt-1 text-zinc-600 dark:text-zinc-400">
-                <span className="font-medium text-zinc-700 dark:text-zinc-300">
+              <p className="mt-1 text-zinc-600 dark:text-zinc-500">
+                <span className="font-medium text-zinc-700 dark:text-zinc-900">
                   Updated At:
                 </span>{" "}
                 {formatDateTime(editingConstraint.updated_at)}
@@ -678,7 +720,7 @@ function ConstraintModal({
             type="button"
             onClick={onCancel}
             disabled={isSaving}
-            className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
+            className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-200 dark:bg-white dark:text-zinc-700 dark:hover:bg-zinc-50"
           >
             Cancel
           </button>
@@ -686,7 +728,7 @@ function ConstraintModal({
             type="button"
             onClick={onSave}
             disabled={isSaving}
-            className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-[#54B5FB] dark:text-white dark:hover:bg-[#3a9ce8]"
           >
             {isSaving ? "Saving..." : "Save"}
           </button>
@@ -1109,60 +1151,60 @@ export default function ConstraintsPage() {
 
   if (isProjectLoading) {
     return (
-      <main className="mx-auto flex min-h-[50vh] w-full max-w-7xl items-center justify-center p-6 sm:p-10">
+      <ConstraintsPageShell contentClassName="relative mx-auto flex min-h-[50vh] w-full max-w-7xl items-center justify-center p-6 sm:p-10">
         <Loader2
-          className="h-8 w-8 animate-spin text-zinc-400"
+          className="h-8 w-8 animate-spin text-[#359FAB] dark:text-[#54B5FB]"
           aria-label="Loading project"
         />
-      </main>
+      </ConstraintsPageShell>
     );
   }
 
   if (!activeProject) {
     return (
-      <main className="mx-auto w-full max-w-7xl flex-1 p-6 sm:p-10">
-        <div className="rounded-xl border border-zinc-200 bg-white p-8 text-center dark:border-zinc-800 dark:bg-zinc-950">
-          <p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
+      <ConstraintsPageShell>
+        <div className={`${CONSTRAINTS_TEAL_CARD_CLASS} p-8 text-center`}>
+          <p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-500">
             No project selected.
             <br />
             Please select a project to continue.
           </p>
           <Link
             href="/select-project"
-            className="mt-4 inline-flex rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+            className="mt-4 inline-flex rounded-lg bg-[#0a1420] px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-zinc-800"
           >
             Select Project
           </Link>
         </div>
-      </main>
+      </ConstraintsPageShell>
     );
   }
 
   if (fetchError) {
     return (
-      <main className="mx-auto w-full max-w-7xl flex-1 p-6 sm:p-10">
-        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
+      <ConstraintsPageShell>
+        <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-white sm:text-3xl">
           Constraint Register
         </h1>
-        <p className="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
+        <p className="mt-6 rounded-lg border border-red-200 border-l-4 border-l-red-500 bg-white px-4 py-3 text-sm text-red-800 shadow-lg shadow-red-500/10 dark:bg-white/95">
           Failed to load constraints: {fetchError}
         </p>
-      </main>
+      </ConstraintsPageShell>
     );
   }
 
   return (
-    <main className="mx-auto w-full max-w-7xl flex-1 p-6 sm:p-10">
+    <ConstraintsPageShell>
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
+          <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-white sm:text-3xl">
             Constraint Register
           </h1>
           <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
             Track and manage construction constraints linked to activities.
           </p>
           <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-            <span className="inline-flex items-center rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+            <span className="inline-flex items-center rounded-full bg-white/80 px-2.5 py-0.5 text-xs font-medium text-zinc-700 shadow-sm dark:bg-white/95 dark:text-zinc-700">
               {activeProject.code} — {activeProject.name}
             </span>
           </p>
@@ -1170,34 +1212,34 @@ export default function ConstraintsPage() {
         <button
           type="button"
           onClick={openAddModal}
-          className="inline-flex shrink-0 items-center justify-center rounded-lg bg-zinc-900 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+          className="inline-flex shrink-0 items-center justify-center rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 dark:bg-[#54B5FB] dark:text-white dark:hover:bg-[#3a9ce8]"
         >
           Add Constraint
         </button>
       </div>
 
       <div className="mb-8 grid gap-4 sm:grid-cols-3">
-        <div className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
-          <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
+        <div className={`${CONSTRAINTS_TEAL_CARD_CLASS} p-5`}>
+          <p className="text-sm font-medium text-zinc-500 dark:text-zinc-500">
             Total Constraints
           </p>
-          <p className="mt-2 text-3xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
+          <p className="mt-2 text-3xl font-bold tracking-tight text-zinc-900 dark:text-zinc-900">
             {isLoading ? "—" : totalConstraints.toLocaleString()}
           </p>
         </div>
-        <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 shadow-sm dark:border-amber-900/50 dark:bg-amber-950/30">
-          <p className="text-sm font-medium text-amber-700 dark:text-amber-300">
+        <div className={`${CONSTRAINTS_AMBER_CARD_CLASS} p-5`}>
+          <p className="text-sm font-medium text-amber-700 dark:text-amber-700">
             Open Constraints
           </p>
-          <p className="mt-2 text-3xl font-bold tracking-tight text-amber-900 dark:text-amber-100">
+          <p className="mt-2 text-3xl font-bold tracking-tight text-amber-800 dark:text-amber-800">
             {isLoading ? "—" : openConstraints.toLocaleString()}
           </p>
         </div>
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-5 shadow-sm dark:border-emerald-900/50 dark:bg-emerald-950/30">
-          <p className="text-sm font-medium text-emerald-700 dark:text-emerald-300">
+        <div className={`${CONSTRAINTS_EMERALD_CARD_CLASS} p-5`}>
+          <p className="text-sm font-medium text-emerald-700 dark:text-emerald-700">
             Closed Constraints
           </p>
-          <p className="mt-2 text-3xl font-bold tracking-tight text-emerald-900 dark:text-emerald-100">
+          <p className="mt-2 text-3xl font-bold tracking-tight text-emerald-800 dark:text-emerald-800">
             {isLoading ? "—" : closedConstraints.toLocaleString()}
           </p>
         </div>
@@ -1207,7 +1249,7 @@ export default function ConstraintsPage() {
         <div className="w-full lg:max-w-md">
           <label
             htmlFor="constraint-search"
-            className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+            className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-500"
           >
             Search constraints
           </label>
@@ -1218,7 +1260,7 @@ export default function ConstraintsPage() {
             onChange={(event) => setSearchQuery(event.target.value)}
             placeholder="Search by Activity ID or Description"
             disabled={isLoading}
-            className="w-full rounded-lg border border-zinc-300 bg-white px-4 py-2.5 text-sm text-zinc-900 shadow-sm outline-none ring-blue-500 placeholder:text-zinc-400 focus:border-blue-500 focus:ring-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-500"
+            className="w-full rounded-lg border border-zinc-300 bg-white px-4 py-2.5 text-sm text-zinc-900 shadow-sm outline-none ring-blue-500 placeholder:text-zinc-400 focus:border-blue-500 focus:ring-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-200 dark:bg-white/95 dark:text-zinc-900 dark:placeholder:text-zinc-400"
           />
         </div>
 
@@ -1245,55 +1287,55 @@ export default function ConstraintsPage() {
       </div>
 
       {isLoading ? (
-        <p className="rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-8 text-center text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-400">
+        <p className={`${CONSTRAINTS_TEAL_CARD_CLASS} px-4 py-8 text-center text-sm text-zinc-600 dark:text-zinc-500`}>
           Loading constraints...
         </p>
       ) : constraints.length === 0 ? (
-        <p className="rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-8 text-center text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-400">
+        <p className={`${CONSTRAINTS_TEAL_CARD_CLASS} px-4 py-8 text-center text-sm text-zinc-600 dark:text-zinc-500`}>
           No constraints found. Add your first constraint.
         </p>
       ) : filteredConstraints.length === 0 ? (
-        <p className="rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-8 text-center text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-400">
+        <p className={`${CONSTRAINTS_TEAL_CARD_CLASS} px-4 py-8 text-center text-sm text-zinc-600 dark:text-zinc-500`}>
           No constraints match your search.
         </p>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-zinc-200 shadow-sm dark:border-zinc-800">
-          <table className="min-w-full divide-y divide-zinc-200 text-left text-sm dark:divide-zinc-800">
-            <thead className="bg-zinc-50 dark:bg-zinc-900/60">
+        <div className={CONSTRAINTS_TABLE_CARD_CLASS}>
+          <table className="min-w-full divide-y divide-zinc-200 text-left text-sm dark:divide-zinc-200">
+            <thead className="bg-zinc-50">
               <tr>
-                <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+                <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-900">
                   Activity ID
                 </th>
-                <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+                <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-900">
                   Constraint Type
                 </th>
-                <th className="min-w-[12rem] px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+                <th className="min-w-[12rem] px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-900">
                   Description
                 </th>
-                <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+                <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-900">
                   Raised By
                 </th>
-                <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+                <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-900">
                   Assigned To
                 </th>
-                <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+                <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-900">
                   Status
                 </th>
-                <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+                <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-900">
                   Target Removal Date
                 </th>
-                <th className="min-w-[8rem] px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+                <th className="min-w-[8rem] px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-900">
                   Remarks
                 </th>
-                <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+                <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-900">
                   Created At
                 </th>
-                <th className="min-w-[12rem] px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+                <th className="min-w-[12rem] px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-900">
                   Actions
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-200 bg-white dark:divide-zinc-800 dark:bg-zinc-950">
+            <tbody className="divide-y divide-zinc-200 bg-white dark:divide-zinc-200">
               {filteredConstraints.map((constraint) => {
                 const isRowBusy = rowActionId === constraint.id;
                 const isConfirmingClose = confirmCloseId === constraint.id;
@@ -1302,25 +1344,28 @@ export default function ConstraintsPage() {
                 return (
                   <tr
                     key={constraint.id}
-                    className="align-top transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-900/40"
+                    className="align-top transition-colors hover:bg-zinc-50"
                   >
-                    <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-zinc-700 dark:text-zinc-300">
+                    <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-zinc-900 dark:text-zinc-900">
                       {formatCell(constraint.activity_id)}
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-zinc-700 dark:text-zinc-300">
+                    <td className="whitespace-nowrap px-4 py-3 font-medium text-zinc-900 dark:text-zinc-900">
                       {constraint.constraint_type}
                     </td>
-                    <td className="max-w-xs px-4 py-3 text-zinc-700 dark:text-zinc-300">
-                      <p className="line-clamp-2" title={constraint.description}>
+                    <td className="max-w-xs px-4 py-3">
+                      <p
+                        className="line-clamp-2 text-zinc-900 dark:text-zinc-900"
+                        title={constraint.description}
+                      >
                         {constraint.description}
                       </p>
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-zinc-700 dark:text-zinc-300">
+                    <td className="whitespace-nowrap px-4 py-3 text-zinc-900 dark:text-zinc-900">
                       {formatCell(constraint.raised_by)}
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-zinc-700 dark:text-zinc-300">
+                    <td className="whitespace-nowrap px-4 py-3 text-zinc-900 dark:text-zinc-900">
                       {constraint.assigned_to_name ? (
-                        <span className="inline-flex items-center rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 dark:bg-blue-950/30 dark:text-blue-300">
+                        <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 dark:border dark:border-[#54B5FB]/40 dark:bg-zinc-100 dark:text-zinc-900">
                           {constraint.assigned_to_name}
                         </span>
                       ) : (
@@ -1332,24 +1377,24 @@ export default function ConstraintsPage() {
                     <td className="whitespace-nowrap px-4 py-3">
                       <StatusBadge status={constraint.status} />
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-zinc-700 dark:text-zinc-300">
+                    <td className="whitespace-nowrap px-4 py-3 text-zinc-900 dark:text-zinc-900">
                       {formatDate(constraint.target_removal_date)}
                     </td>
-                    <td className="max-w-xs px-4 py-3 text-zinc-700 dark:text-zinc-300">
+                    <td className="max-w-xs px-4 py-3">
                       <p
-                        className="line-clamp-2"
+                        className="line-clamp-2 text-zinc-900 dark:text-zinc-900"
                         title={constraint.remarks ?? undefined}
                       >
                         {formatCell(constraint.remarks)}
                       </p>
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-zinc-700 dark:text-zinc-300">
+                    <td className="whitespace-nowrap px-4 py-3 text-zinc-900 dark:text-zinc-900">
                       {formatDateTime(constraint.created_at)}
                     </td>
                     <td className="px-4 py-3">
                       {isConfirmingClose ? (
                         <div className="space-y-2">
-                          <p className="text-xs text-zinc-600 dark:text-zinc-400">
+                          <p className="text-xs text-zinc-600 dark:text-zinc-500">
                             Are you sure?
                           </p>
                           <div className="flex flex-wrap gap-2">
@@ -1357,7 +1402,7 @@ export default function ConstraintsPage() {
                               type="button"
                               disabled={isRowBusy}
                               onClick={() => void handleCloseConstraint(constraint)}
-                              className="rounded-md bg-amber-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-amber-700 disabled:opacity-50"
+                              className="rounded-md bg-amber-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-amber-700 disabled:opacity-50 dark:bg-amber-600 dark:hover:bg-amber-700"
                             >
                               {isRowBusy ? "Closing..." : "Confirm"}
                             </button>
@@ -1365,7 +1410,7 @@ export default function ConstraintsPage() {
                               type="button"
                               disabled={isRowBusy}
                               onClick={() => setConfirmCloseId(null)}
-                              className="rounded-md border border-zinc-300 bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200"
+                              className="rounded-md border border-zinc-300 bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-200 dark:bg-white dark:text-zinc-700 dark:hover:bg-zinc-50"
                             >
                               Cancel
                             </button>
@@ -1373,7 +1418,7 @@ export default function ConstraintsPage() {
                         </div>
                       ) : isConfirmingDelete ? (
                         <div className="space-y-2">
-                          <p className="text-xs text-zinc-600 dark:text-zinc-400">
+                          <p className="text-xs text-zinc-600 dark:text-zinc-500">
                             Are you sure?
                           </p>
                           <div className="flex flex-wrap gap-2">
@@ -1383,7 +1428,7 @@ export default function ConstraintsPage() {
                               onClick={() =>
                                 void handleDeleteConstraint(constraint)
                               }
-                              className="rounded-md bg-red-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                              className="rounded-md bg-red-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50 dark:bg-red-600 dark:hover:bg-red-700"
                             >
                               {isRowBusy ? "Deleting..." : "Confirm"}
                             </button>
@@ -1391,7 +1436,7 @@ export default function ConstraintsPage() {
                               type="button"
                               disabled={isRowBusy}
                               onClick={() => setConfirmDeleteId(null)}
-                              className="rounded-md border border-zinc-300 bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200"
+                              className="rounded-md border border-zinc-300 bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-200 dark:bg-white dark:text-zinc-700 dark:hover:bg-zinc-50"
                             >
                               Cancel
                             </button>
@@ -1403,7 +1448,7 @@ export default function ConstraintsPage() {
                             type="button"
                             disabled={isRowBusy}
                             onClick={() => openEditModal(constraint)}
-                            className="rounded-md border border-zinc-300 bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200"
+                            className="rounded-md border border-zinc-300 bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-200 dark:bg-white dark:text-zinc-700 dark:hover:bg-zinc-50"
                           >
                             Edit
                           </button>
@@ -1420,7 +1465,7 @@ export default function ConstraintsPage() {
                                   return next;
                                 });
                               }}
-                              className="rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800 transition-colors hover:bg-amber-100 disabled:opacity-50 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
+                              className="rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800 transition-colors hover:bg-amber-100 disabled:opacity-50 dark:border-amber-200 dark:bg-amber-50 dark:text-amber-800 dark:hover:bg-amber-100"
                             >
                               Close
                             </button>
@@ -1437,7 +1482,7 @@ export default function ConstraintsPage() {
                                 return next;
                               });
                             }}
-                            className="rounded-md border border-red-300 bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700 transition-colors hover:bg-red-100 disabled:opacity-50 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200"
+                            className="rounded-md border border-red-300 bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700 transition-colors hover:bg-red-100 disabled:opacity-50 dark:border-red-200 dark:bg-red-50 dark:text-red-700 dark:hover:bg-red-100"
                           >
                             Delete
                           </button>
@@ -1472,6 +1517,6 @@ export default function ConstraintsPage() {
           onSave={() => void handleSave()}
         />
       )}
-    </main>
+    </ConstraintsPageShell>
   );
 }

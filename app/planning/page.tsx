@@ -16,8 +16,42 @@ import {
 } from "recharts";
 import { supabase } from "@/lib/supabase";
 import { useActiveProject } from "@/lib/hooks/useActiveProject";
-import { useProjectRole } from "@/lib/hooks/useProjectRole";
+import { useCurrentUser } from "@/lib/contexts/UserContext";
 import { hasRoleAccess } from "@/lib/role-access";
+
+const PLANNING_PAGE_BG_CLASS =
+  "relative min-h-full w-full bg-gradient-to-br from-[#e8f6f7] via-[#eaf4ff] to-[#f0f9ed] dark:bg-none dark:bg-[#0a1420]";
+
+const PLANNING_TABLE_CARD_CLASS =
+  "w-full rounded-xl border border-zinc-200 border-l-4 border-l-[#54B5FB] bg-white shadow-lg shadow-[#54B5FB]/15 dark:border-zinc-200/30 dark:bg-white/95 dark:shadow-xl dark:shadow-black/30";
+
+const PLANNING_FLOATING_CARD_CLASS =
+  "rounded-xl border border-zinc-200 border-l-4 border-l-[#359FAB] bg-white shadow-lg shadow-black/5 dark:border-zinc-200/30 dark:bg-white/95 dark:shadow-xl dark:shadow-black/30";
+
+const PLANNING_SAGE_CARD_CLASS =
+  "rounded-xl border border-zinc-200 border-l-4 border-l-[#A6DBA0] bg-white shadow-lg shadow-black/5 dark:border-zinc-200/30 dark:bg-white/95 dark:shadow-xl dark:shadow-black/30";
+
+function PlanningPageShell({
+  children,
+  contentClassName = "relative mx-auto w-full max-w-7xl flex-1 space-y-8 p-6 sm:p-10",
+}: {
+  children: React.ReactNode;
+  contentClassName?: string;
+}) {
+  return (
+    <main className={PLANNING_PAGE_BG_CLASS}>
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 hidden dark:block"
+        style={{
+          background:
+            "radial-gradient(circle at 30% 20%, rgba(53,159,171,0.3) 0%, transparent 50%), radial-gradient(circle at 80% 80%, rgba(84,181,251,0.25) 0%, transparent 50%)",
+        }}
+      />
+      <div className={contentClassName}>{children}</div>
+    </main>
+  );
+}
 
 const SESSION_LENGTH_DAYS = 14;
 const MS_PER_DAY = 86_400_000;
@@ -489,14 +523,14 @@ function PpcChartTooltip({ active, payload }: ChartTooltipProps) {
   const data = payload[0].payload;
 
   return (
-    <div className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm shadow-md dark:border-zinc-700 dark:bg-zinc-900">
-      <p className="font-medium text-zinc-900 dark:text-zinc-100">
+    <div className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm shadow-md">
+      <p className="font-medium text-zinc-900">
         {formatSessionRange(data.startDate, data.endDate)}
       </p>
-      <p className="mt-1 text-zinc-600 dark:text-zinc-400">
+      <p className="mt-1 text-zinc-600">
         PPC: {data.ppc.toFixed(1)}%
       </p>
-      <p className="text-zinc-600 dark:text-zinc-400">
+      <p className="text-zinc-600">
         Completed: {data.completed} / {data.total}
       </p>
     </div>
@@ -629,12 +663,12 @@ function SessionDetailModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="session-detail-title"
-        className="relative z-10 max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-xl border border-zinc-200 bg-white p-6 shadow-xl dark:border-zinc-800 dark:bg-zinc-950"
+        className="relative z-10 max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-xl border border-zinc-200 bg-white p-6 shadow-xl dark:border-zinc-200/30 dark:bg-white/95"
       >
         <div className="flex items-start justify-between gap-4">
           <h2
             id="session-detail-title"
-            className="text-lg font-semibold text-zinc-900 dark:text-zinc-100"
+            className="text-lg font-semibold text-zinc-900 dark:text-zinc-900"
           >
             Session Details —{" "}
             {formatSessionRange(session.start_date, session.end_date)}
@@ -643,18 +677,18 @@ function SessionDetailModal({
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="rounded-md p-1 text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+            className="rounded-md p-1 text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-500 dark:hover:bg-zinc-100 dark:hover:text-zinc-900"
           >
             <X className="h-5 w-5" aria-hidden="true" />
           </button>
         </div>
 
-        <p className="mt-4 text-sm text-zinc-600 dark:text-zinc-400">
+        <p className="mt-4 text-sm text-zinc-600 dark:text-zinc-500">
           Total: {total} | Completed: {completed} | PPC: {ppc}%
         </p>
 
         {isLoading ? (
-          <div className="mt-6 flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
+          <div className="mt-6 flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-500">
             <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
             Loading session details...
           </div>
@@ -663,44 +697,44 @@ function SessionDetailModal({
             {errorMessage}
           </p>
         ) : activities.length === 0 ? (
-          <p className="mt-6 text-sm text-zinc-600 dark:text-zinc-400">
+          <p className="mt-6 text-sm text-zinc-600 dark:text-zinc-500">
             No activities recorded for this session.
           </p>
         ) : (
-          <div className="mt-6 overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
-            <table className="min-w-full divide-y divide-zinc-200 text-left text-sm dark:divide-zinc-800">
-              <thead className="bg-zinc-50 dark:bg-zinc-900/60">
+          <div className={`mt-6 overflow-x-auto ${PLANNING_TABLE_CARD_CLASS}`}>
+            <table className="min-w-full divide-y divide-zinc-200 text-left text-sm dark:divide-zinc-200">
+              <thead className="bg-zinc-50">
                 <tr>
-                  <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+                  <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-900">
                     Activity ID
                   </th>
-                  <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+                  <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-900">
                     Activity Name
                   </th>
-                  <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+                  <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-900">
                     Assigned To
                   </th>
-                  <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+                  <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-900">
                     Status
                   </th>
-                  <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+                  <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-900">
                     Variance Reason
                   </th>
-                  <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+                  <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-900">
                     Completed At
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-200 bg-white dark:divide-zinc-800 dark:bg-zinc-950">
+              <tbody className="divide-y divide-zinc-200 bg-white dark:divide-zinc-200">
                 {activities.map((row) => (
                   <tr key={row.activity_id}>
-                    <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-zinc-700 dark:text-zinc-300">
+                    <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-zinc-700 dark:text-zinc-500">
                       {row.activity_id}
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3 font-medium text-zinc-900 dark:text-zinc-100">
+                    <td className="whitespace-nowrap px-4 py-3 font-medium text-zinc-900 dark:text-zinc-900">
                       {row.activity_name}
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-zinc-700 dark:text-zinc-300">
+                    <td className="whitespace-nowrap px-4 py-3 text-zinc-700 dark:text-zinc-500">
                       {row.assigned_name ?? "Unassigned"}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3">
@@ -714,10 +748,10 @@ function SessionDetailModal({
                         </span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-zinc-700 dark:text-zinc-300">
+                    <td className="px-4 py-3 text-zinc-700 dark:text-zinc-500">
                       {row.variance_reason ?? "—"}
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-zinc-700 dark:text-zinc-300">
+                    <td className="whitespace-nowrap px-4 py-3 text-zinc-700 dark:text-zinc-500">
                       {formatDateTime(row.completed_at)}
                     </td>
                   </tr>
@@ -779,15 +813,15 @@ function VarianceCloseModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="variance-modal-title"
-        className="relative z-10 max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border border-zinc-200 bg-white p-6 shadow-xl dark:border-zinc-800 dark:bg-zinc-950"
+        className="relative z-10 max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border border-zinc-200 bg-white p-6 shadow-xl dark:border-zinc-200/30 dark:bg-white/95"
       >
         <h2
           id="variance-modal-title"
-          className="text-lg font-semibold text-zinc-900 dark:text-zinc-100"
+          className="text-lg font-semibold text-zinc-900 dark:text-zinc-900"
         >
           Close Session — Capture Variance Reasons
         </h2>
-        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-500">
           The following activities were not completed. Select a reason for each
           before closing.
         </p>
@@ -796,12 +830,12 @@ function VarianceCloseModal({
           {incompleteActivities.map((row) => (
             <div
               key={row.id}
-              className="rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900/40"
+              className="rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-200 dark:bg-zinc-50"
             >
-              <p className="font-mono text-xs text-zinc-500 dark:text-zinc-400">
+              <p className="font-mono text-xs text-zinc-500 dark:text-zinc-500">
                 {row.activity_id}
               </p>
-              <p className="mt-1 text-sm font-medium text-zinc-900 dark:text-zinc-100">
+              <p className="mt-1 text-sm font-medium text-zinc-900 dark:text-zinc-900">
                 {row.activities?.activity_name ?? "—"}
               </p>
               <select
@@ -810,7 +844,7 @@ function VarianceCloseModal({
                 onChange={(event) =>
                   onReasonChange(row.id, event.target.value as VarianceReason)
                 }
-                className="mt-3 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+                className="mt-3 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:opacity-50 dark:border-zinc-200 dark:bg-white dark:text-zinc-900"
               >
                 <option value="" disabled>
                   Select reason...
@@ -831,7 +865,7 @@ function VarianceCloseModal({
                   onChange={(event) =>
                     onOtherReasonChange(row.id, event.target.value)
                   }
-                  className="mt-2 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+                  className="mt-2 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:opacity-50 dark:border-zinc-200 dark:bg-white dark:text-zinc-900"
                 />
               )}
             </div>
@@ -849,7 +883,7 @@ function VarianceCloseModal({
             type="button"
             onClick={() => void onConfirm()}
             disabled={isClosing || !allReasonsSelected}
-            className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-[#54B5FB] dark:text-white dark:hover:bg-[#3a9ce8]"
           >
             {isClosing ? "Closing..." : "Confirm Close"}
           </button>
@@ -857,7 +891,7 @@ function VarianceCloseModal({
             type="button"
             onClick={onCancel}
             disabled={isClosing}
-            className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
+            className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-200 dark:bg-white dark:text-zinc-700 dark:hover:bg-zinc-50"
           >
             Cancel
           </button>
@@ -869,7 +903,13 @@ function VarianceCloseModal({
 
 export default function PlanningPage() {
   const router = useRouter();
-  const { role, isRoleLoading } = useProjectRole();
+  const {
+    projectRole: role,
+    projectId,
+    isLoading: isUserContextLoading,
+    isProjectRoleLoading,
+  } = useCurrentUser();
+  const isRoleLoading = isUserContextLoading || isProjectRoleLoading;
   const { activeProject, isLoading: isProjectLoading } = useActiveProject();
   const [activeSession, setActiveSession] = useState<PlanningSession | null>(
     null,
@@ -931,18 +971,18 @@ export default function PlanningPage() {
     role === "admin" || role === "planner";
 
   const loadData = useCallback(async () => {
-    if (!activeProject) return;
+    if (!activeProject || !projectId) return;
 
     setIsLoading(true);
     setFetchError(null);
 
-    const engineersList = await loadProjectEngineers(activeProject.id);
+    const engineersList = await loadProjectEngineers(projectId);
     setEngineers(engineersList);
 
     const { data: activeData, error: activeError } = await supabase
       .from("planning_sessions")
       .select("*")
-      .eq("project_id", activeProject.id)
+      .eq("project_id", projectId)
       .eq("status", "active")
       .limit(1)
       .maybeSingle();
@@ -996,7 +1036,7 @@ export default function PlanningPage() {
 
         const activityIds = normalizedActivities.map((row) => row.activity_id);
         const nextAssignmentMap = await loadAssignmentMap(
-          activeProject.id,
+          projectId,
           activityIds,
         );
         setAssignmentMap(nextAssignmentMap);
@@ -1027,13 +1067,13 @@ export default function PlanningPage() {
           )
         `,
         )
-        .eq("project_id", activeProject.id)
+        .eq("project_id", projectId)
         .eq("status", "closed")
         .order("created_at", { ascending: false }),
       supabase
         .from("planning_sessions")
         .select("end_date")
-        .eq("project_id", activeProject.id)
+        .eq("project_id", projectId)
         .eq("status", "closed")
         .order("end_date", { ascending: false })
         .limit(1)
@@ -1057,7 +1097,7 @@ export default function PlanningPage() {
     }
 
     setIsLoading(false);
-  }, [activeProject]);
+  }, [activeProject, projectId]);
 
   useEffect(() => {
     document.title = "Planning Sessions";
@@ -1076,6 +1116,7 @@ export default function PlanningPage() {
   useEffect(() => {
     if (
       !activeProject ||
+      !projectId ||
       isRoleLoading ||
       !hasRoleAccess(role, "planning")
     ) {
@@ -1083,7 +1124,7 @@ export default function PlanningPage() {
     }
 
     void loadData();
-  }, [loadData, activeProject, isRoleLoading, role]);
+  }, [loadData, activeProject, projectId, isRoleLoading, role]);
 
   const minStartDate = useMemo(
     () => calculateMinStartDate(lastClosedSessionEndDate),
@@ -1703,70 +1744,70 @@ export default function PlanningPage() {
 
   if (isProjectLoading || isRoleLoading) {
     return (
-      <main className="mx-auto flex min-h-[50vh] w-full max-w-7xl items-center justify-center p-6 sm:p-10">
+      <PlanningPageShell contentClassName="relative mx-auto flex min-h-[50vh] w-full max-w-7xl items-center justify-center p-6 sm:p-10">
         <Loader2
-          className="h-8 w-8 animate-spin text-zinc-400"
+          className="h-8 w-8 animate-spin text-[#359FAB] dark:text-[#54B5FB]"
           aria-label="Loading project"
         />
-      </main>
+      </PlanningPageShell>
     );
   }
 
   if (!hasRoleAccess(role, "planning")) {
     return (
-      <main className="mx-auto flex min-h-[50vh] w-full max-w-7xl items-center justify-center p-6 sm:p-10">
+      <PlanningPageShell contentClassName="relative mx-auto flex min-h-[50vh] w-full max-w-7xl items-center justify-center p-6 sm:p-10">
         <Loader2
-          className="h-8 w-8 animate-spin text-zinc-400"
+          className="h-8 w-8 animate-spin text-[#359FAB] dark:text-[#54B5FB]"
           aria-label="Checking access"
         />
-      </main>
+      </PlanningPageShell>
     );
   }
 
   if (!activeProject) {
     return (
-      <main className="mx-auto w-full max-w-7xl flex-1 p-6 sm:p-10">
-        <div className="rounded-xl border border-zinc-200 bg-white p-8 text-center dark:border-zinc-800 dark:bg-zinc-950">
-          <p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
+      <PlanningPageShell>
+        <div className={`${PLANNING_FLOATING_CARD_CLASS} p-8 text-center`}>
+          <p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-500">
             No project selected.
             <br />
             Please select a project to continue.
           </p>
           <Link
             href="/select-project"
-            className="mt-4 inline-flex rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+            className="mt-4 inline-flex rounded-lg bg-[#0a1420] px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-zinc-800"
           >
             Select Project
           </Link>
         </div>
-      </main>
+      </PlanningPageShell>
     );
   }
 
   if (fetchError && isLoading) {
     return (
-      <main className="mx-auto w-full max-w-7xl flex-1 p-6 sm:p-10">
-        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
+      <PlanningPageShell>
+        <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-white sm:text-3xl">
           Planning Sessions
         </h1>
-        <p className="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
+        <p className="mt-6 rounded-lg border border-red-200 border-l-4 border-l-red-500 bg-white px-4 py-3 text-sm text-red-800 shadow-lg shadow-red-500/10 dark:bg-white/95">
           Failed to load planning data: {fetchError}
         </p>
-      </main>
+      </PlanningPageShell>
     );
   }
 
   return (
-    <main className="mx-auto w-full max-w-7xl flex-1 space-y-8 p-6 sm:p-10">
+    <PlanningPageShell>
       <div>
-        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
+        <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-white sm:text-3xl">
           Planning Sessions
         </h1>
         <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
           Manage 14-day planning sessions and track PPC performance.
         </p>
         <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-          <span className="inline-flex items-center rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+          <span className="inline-flex items-center rounded-full bg-white/80 px-2.5 py-0.5 text-xs font-medium text-zinc-700 shadow-sm dark:bg-white/95 dark:text-zinc-700">
             {activeProject.code} — {activeProject.name}
           </span>
         </p>
@@ -1785,22 +1826,22 @@ export default function PlanningPage() {
       )}
 
       {isLoading ? (
-        <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-12 text-center text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-400">
+        <div className={`${PLANNING_FLOATING_CARD_CLASS} px-4 py-12 text-center text-sm text-zinc-600 dark:text-zinc-500`}>
           Loading planning session...
         </div>
       ) : activeSession ? (
         <>
-          <section className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+          <section className={`${PLANNING_FLOATING_CARD_CLASS} p-6`}>
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div>
-                <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+                <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-900">
                   Active Planning Session
                 </h2>
-                <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+                <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-500">
                   {formatDate(activeSession.start_date)} —{" "}
                   {formatDate(activeSession.end_date)}
                 </p>
-                <p className="mt-1 text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                <p className="mt-1 text-sm font-medium text-zinc-700 dark:text-zinc-500">
                   {daysRemaining} day{daysRemaining === 1 ? "" : "s"} remaining
                 </p>
               </div>
@@ -1808,56 +1849,53 @@ export default function PlanningPage() {
             </div>
           </section>
 
-          <section className="rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
-            <div className="border-b border-zinc-200 px-6 py-4 dark:border-zinc-800">
-              <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+          <section className={PLANNING_TABLE_CARD_CLASS}>
+            <div className="border-b border-zinc-200 px-6 py-4 dark:border-zinc-200">
+              <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-900">
                 Committed Activities
               </h2>
-              <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+              <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-500">
                 {sessionActivities.length} activit
                 {sessionActivities.length === 1 ? "y" : "ies"} in this session
               </p>
             </div>
 
             <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-zinc-200 text-left text-sm dark:divide-zinc-800">
-                <thead className="bg-zinc-50 dark:bg-zinc-900/60">
+              <table className="min-w-full divide-y divide-zinc-200 text-left text-sm dark:divide-zinc-200">
+                <thead className="bg-zinc-50">
                   <tr>
-                    <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+                    <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-900">
                       Activity ID
                     </th>
-                    <th className="min-w-[12rem] px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+                    <th className="min-w-[12rem] px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-900">
                       Activity Name
                     </th>
-                    <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+                    <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-900">
                       Planned Finish
                     </th>
-                    <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+                    <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-900">
                       Status
                     </th>
                     {canManageAssignments && (
-                      <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+                      <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-900">
                         Assignment
                       </th>
                     )}
-                    <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+                    <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-900">
                       Action
                     </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-zinc-200 bg-white dark:divide-zinc-800 dark:bg-zinc-950">
+                <tbody className="divide-y divide-zinc-200 bg-white dark:divide-zinc-200">
                   {sessionActivities.map((row) => (
-                    <tr
-                      key={row.id}
-                      className="hover:bg-zinc-50 dark:hover:bg-zinc-900/40"
-                    >
-                      <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-zinc-700 dark:text-zinc-300">
+                    <tr key={row.id} className="hover:bg-zinc-50">
+                      <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-zinc-700 dark:text-zinc-500">
                         {row.activity_id}
                       </td>
-                      <td className="px-4 py-3 font-medium text-zinc-900 dark:text-zinc-100">
+                      <td className="px-4 py-3 font-medium text-zinc-900 dark:text-zinc-900">
                         {row.activities?.activity_name ?? "—"}
                       </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-zinc-700 dark:text-zinc-300">
+                      <td className="whitespace-nowrap px-4 py-3 text-zinc-700 dark:text-zinc-500">
                         {formatDate(row.activities?.finish_date ?? null)}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3">
@@ -1905,7 +1943,7 @@ export default function PlanningPage() {
                                         selectedUserId,
                                       );
                                     }}
-                                    className="rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-xs text-zinc-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+                                    className="rounded-md border border-zinc-300 bg-blue-50 px-2 py-1.5 text-xs font-medium text-blue-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-200 dark:bg-[#54B5FB] dark:text-white dark:hover:bg-[#3a9ce8]"
                                   >
                                     <option value="" disabled>
                                       {isSavingAssign
@@ -1945,7 +1983,7 @@ export default function PlanningPage() {
                                       return next;
                                     })
                                   }
-                                  className="text-xs font-medium text-zinc-600 underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:opacity-50 dark:text-zinc-400"
+                                  className="rounded border border-zinc-300 bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-[#54B5FB] dark:bg-white dark:text-[#54B5FB] dark:hover:bg-[#54B5FB]/10"
                                 >
                                   Reassign
                                 </button>
@@ -1987,7 +2025,7 @@ export default function PlanningPage() {
                                   )
                                 }
                                 disabled={isActionLoading}
-                                className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-blue-500 dark:hover:bg-blue-400"
+                                className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-[#54B5FB] dark:text-white dark:hover:bg-[#3a9ce8]"
                               >
                                 {isActionLoading
                                   ? "Saving..."
@@ -2010,7 +2048,7 @@ export default function PlanningPage() {
                                   )
                                 }
                                 disabled={isActionLoading}
-                                className="rounded-md border border-zinc-300 bg-zinc-100 px-3 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                                className="rounded-md border border-zinc-300 bg-zinc-100 px-3 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-200 dark:bg-white dark:text-zinc-700 dark:hover:bg-zinc-50"
                               >
                                 {isActionLoading
                                   ? "Saving..."
@@ -2032,10 +2070,10 @@ export default function PlanningPage() {
               </table>
             </div>
 
-            <div className="border-t border-zinc-200 px-6 py-4 dark:border-zinc-800">
+            <div className="border-t border-zinc-200 px-6 py-4 dark:border-zinc-200">
               {showCloseConfirm ? (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-4 dark:border-amber-900/50 dark:bg-amber-950/30">
-                  <p className="text-sm text-amber-900 dark:text-amber-200">
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-4 dark:border-amber-200 dark:bg-amber-50">
+                  <p className="text-sm text-amber-900 dark:text-amber-900">
                     Close this session? PPC will be recorded as{" "}
                     {livePpc.toFixed(1)}%
                   </p>
@@ -2044,7 +2082,7 @@ export default function PlanningPage() {
                       type="button"
                       onClick={() => void handleCloseSession()}
                       disabled={isClosing}
-                      className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+                      className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-[#54B5FB] dark:text-white dark:hover:bg-[#3a9ce8]"
                     >
                       {isClosing ? "Closing..." : "Confirm Close"}
                     </button>
@@ -2052,7 +2090,7 @@ export default function PlanningPage() {
                       type="button"
                       onClick={() => setShowCloseConfirm(false)}
                       disabled={isClosing}
-                      className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
+                      className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-200 dark:bg-white dark:text-zinc-700 dark:hover:bg-zinc-50"
                     >
                       Cancel
                     </button>
@@ -2064,7 +2102,7 @@ export default function PlanningPage() {
                     type="button"
                     onClick={handleCloseSessionClick}
                     disabled={isClosing}
-                    className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-blue-500 dark:hover:bg-blue-400"
+                    className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-[#54B5FB] dark:text-white dark:hover:bg-[#3a9ce8]"
                   >
                     Close Session
                   </button>
@@ -2075,22 +2113,22 @@ export default function PlanningPage() {
         </>
       ) : (
         <section className="space-y-6">
-          <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-6 py-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/40">
-            <p className="text-sm text-zinc-700 dark:text-zinc-300">
+          <div className={`${PLANNING_FLOATING_CARD_CLASS} px-6 py-5`}>
+            <p className="text-sm text-zinc-700 dark:text-zinc-500">
               No active planning session. Start a new 14-day session to begin
               tracking PPC.
             </p>
           </div>
 
-          <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
-            <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+          <div className={`${PLANNING_FLOATING_CARD_CLASS} p-6`}>
+            <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-900">
               Start New Session
             </h2>
 
             <div className="mt-4 max-w-xs">
               <label
                 htmlFor="session-start-date"
-                className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-500"
               >
                 Start date
               </label>
@@ -2102,35 +2140,35 @@ export default function PlanningPage() {
                 onChange={(event) =>
                   handleStartDateChange(event.target.value)
                 }
-                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500 dark:border-zinc-200 dark:bg-white dark:text-zinc-900"
               />
-              <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+              <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-500">
                 {startDateHint}
               </p>
             </div>
 
             <div className="mt-6">
               {isPreviewLoading ? (
-                <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                <p className="text-sm text-zinc-600 dark:text-zinc-500">
                   Loading activity preview...
                 </p>
               ) : previewActivities.length === 0 ? (
-                <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
+                <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-200 dark:bg-amber-50 dark:text-amber-900">
                   No activities found in this date range. Try a different start
                   date.
                 </p>
               ) : (
                 <>
-                  <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                  <p className="text-sm font-medium text-zinc-900 dark:text-zinc-900">
                     {previewActivities.length} activit
                     {previewActivities.length === 1 ? "y" : "ies"} will be
                     committed to this session
                   </p>
-                  <ul className="mt-3 max-h-48 space-y-1 overflow-y-auto rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm dark:border-zinc-800 dark:bg-zinc-900/40">
+                  <ul className="mt-3 max-h-48 space-y-1 overflow-y-auto rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm dark:border-zinc-200 dark:bg-zinc-50">
                     {previewActivities.map((activity) => (
                       <li
                         key={activity.activity_id}
-                        className="text-zinc-700 dark:text-zinc-300"
+                        className="text-zinc-700 dark:text-zinc-500"
                       >
                         <span className="font-mono text-xs">
                           {activity.activity_id}
@@ -2149,7 +2187,7 @@ export default function PlanningPage() {
               disabled={
                 isStarting || isPreviewLoading || previewActivities.length === 0
               }
-              className="mt-6 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-blue-500 dark:hover:bg-blue-400"
+              className="mt-6 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-[#54B5FB] dark:text-white dark:hover:bg-[#3a9ce8]"
             >
               {isStarting ? "Starting..." : "Start Session"}
             </button>
@@ -2157,17 +2195,17 @@ export default function PlanningPage() {
         </section>
       )}
 
-      <section className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
-        <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+      <section className={`${PLANNING_SAGE_CARD_CLASS} p-6`}>
+        <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-900">
           PPC History
         </h2>
 
         {isLoading ? (
-          <p className="mt-4 text-sm text-zinc-600 dark:text-zinc-400">
+          <p className="mt-4 text-sm text-zinc-600 dark:text-zinc-500">
             Loading PPC history...
           </p>
         ) : closedSessions.length === 0 ? (
-          <p className="mt-4 text-sm text-zinc-600 dark:text-zinc-400">
+          <p className="mt-4 text-sm text-zinc-600 dark:text-zinc-500">
             No completed sessions yet. Close your first session to see PPC
             history.
           </p>
@@ -2181,7 +2219,7 @@ export default function PlanningPage() {
                 >
                   <CartesianGrid
                     strokeDasharray="3 3"
-                    className="stroke-zinc-200 dark:stroke-zinc-800"
+                    className="stroke-zinc-200"
                   />
                   <XAxis
                     dataKey="label"
@@ -2205,34 +2243,34 @@ export default function PlanningPage() {
               </ResponsiveContainer>
             </div>
 
-            <div className="mt-8 overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
-              <table className="min-w-full divide-y divide-zinc-200 text-left text-sm dark:divide-zinc-800">
-                <thead className="bg-zinc-50 dark:bg-zinc-900/60">
+            <div className={`mt-8 overflow-x-auto ${PLANNING_TABLE_CARD_CLASS}`}>
+              <table className="min-w-full divide-y divide-zinc-200 text-left text-sm dark:divide-zinc-200">
+                <thead className="bg-zinc-50">
                   <tr>
-                    <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+                    <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-900">
                       Session Period
                     </th>
-                    <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+                    <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-900">
                       Total
                     </th>
-                    <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+                    <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-900">
                       Completed
                     </th>
-                    <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+                    <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-900">
                       PPC %
                     </th>
-                    <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+                    <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-900">
                       Closed Date
                     </th>
-                    <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+                    <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-900">
                       Variance Reasons
                     </th>
-                    <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+                    <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-900">
                       Details
                     </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-zinc-200 bg-white dark:divide-zinc-800 dark:bg-zinc-950">
+                <tbody className="divide-y divide-zinc-200 bg-white dark:divide-zinc-200">
                   {closedSessions.map((session) => {
                     const activities = session.session_activities ?? [];
                     const total = activities.length;
@@ -2248,22 +2286,22 @@ export default function PlanningPage() {
 
                     return (
                       <tr key={session.id} className="align-top">
-                        <td className="px-4 py-3 text-zinc-700 dark:text-zinc-300">
+                        <td className="px-4 py-3 text-zinc-700 dark:text-zinc-500">
                           {formatSessionRange(
                             session.start_date,
                             session.end_date,
                           )}
                         </td>
-                        <td className="px-4 py-3 text-zinc-700 dark:text-zinc-300">
+                        <td className="px-4 py-3 text-zinc-700 dark:text-zinc-500">
                           {total}
                         </td>
-                        <td className="px-4 py-3 text-zinc-700 dark:text-zinc-300">
+                        <td className="px-4 py-3 text-zinc-700 dark:text-zinc-500">
                           {completed}
                         </td>
                         <td className="px-4 py-3">
                           <PpcBadge ppc={ppc} />
                         </td>
-                        <td className="whitespace-nowrap px-4 py-3 text-zinc-700 dark:text-zinc-300">
+                        <td className="whitespace-nowrap px-4 py-3 text-zinc-700 dark:text-zinc-500">
                           {formatDateTime(session.closed_at)}
                         </td>
                         <td className="px-4 py-3">
@@ -2288,7 +2326,7 @@ export default function PlanningPage() {
                           <button
                             type="button"
                             onClick={() => void handleOpenSessionDetail(session)}
-                            className="rounded border border-zinc-300 bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
+                            className="rounded border border-zinc-300 bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-200 dark:bg-white dark:text-zinc-700 dark:hover:bg-zinc-50"
                           >
                             See Details
                           </button>
@@ -2327,6 +2365,6 @@ export default function PlanningPage() {
           onCancel={handleCancelVarianceModal}
         />
       )}
-    </main>
+    </PlanningPageShell>
   );
 }

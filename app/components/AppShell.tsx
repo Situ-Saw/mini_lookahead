@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import Sidebar from "@/app/components/Sidebar";
 import TopBar from "@/app/components/TopBar";
+import { UserProvider } from "@/lib/contexts/UserContext";
 
 const SHELL_EXCLUDED_PATHS = new Set(["/login", "/select-project"]);
 
@@ -24,10 +25,10 @@ export default function AppShell({
   }
 
   return (
-    <>
+    <UserProvider>
       <Sidebar />
       <TopBar />
       <div className="min-h-full pl-14 pt-12">{children}</div>
-    </>
+    </UserProvider>
   );
 }
