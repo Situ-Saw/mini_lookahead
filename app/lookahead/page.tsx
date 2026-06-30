@@ -3,9 +3,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ChevronDown, Loader2, RefreshCw } from "lucide-react";
-import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import { useActiveProject } from "@/lib/hooks/useActiveProject";
+import { useCurrentUser } from "@/lib/contexts/UserContext";
 
 type PlanningSession = {
   id: string;
@@ -425,6 +425,13 @@ function ActivityCard({
 
 export default function LookaheadPage() {
   const { activeProject, isLoading: isProjectLoading } = useActiveProject();
+  const {
+    user: currentUser,
+    projectRole: currentRole,
+    isLoading: isUserContextLoading,
+    isProjectRoleLoading,
+  } = useCurrentUser();
+  const isRoleLoading = isUserContextLoading || isProjectRoleLoading;
   const [activeSession, setActiveSession] = useState<PlanningSession | null>(
     null,
   );
@@ -437,79 +444,11 @@ export default function LookaheadPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [currentRole, setCurrentRole] = useState<string | null>(null);
-  const [isRoleLoading, setIsRoleLoading] = useState(true);
   const [viewerEngineerMissing, setViewerEngineerMissing] = useState(false);
 
   useEffect(() => {
     document.title = "Look Ahead";
   }, []);
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    if (!activeProject) {
-      setIsRoleLoading(false);
-      return;
-    }
-
-    const projectId = activeProject.id;
-    let cancelled = false;
-
-    async function loadRole() {
-      try {
-        const {
-          data: { user: authUser },
-          error: authError,
-        } = await supabase.auth.getUser();
-
-        if (authError || !authUser) {
-          if (authError) {
-            console.error("Failed to get current user:", authError.message);
-          }
-          if (!cancelled) {
-            setCurrentUser(null);
-            setCurrentRole("viewer");
-            setIsRoleLoading(false);
-          }
-          return;
-        }
-
-        const { data: memberRow, error: memberError } = await supabase
-          .from("project_members")
-          .select("role")
-          .eq("user_id", authUser.id)
-          .eq("project_id", projectId)
-          .maybeSingle();
-
-        if (memberError) {
-          throw new Error(memberError.message);
-        }
-
-        if (!cancelled) {
-          setCurrentUser(authUser);
-          setCurrentRole(memberRow?.role ?? "viewer");
-          setIsRoleLoading(false);
-        }
-      } catch (error) {
-        console.error("Failed to load user role:", error);
-        if (!cancelled) {
-          setCurrentUser(null);
-          setCurrentRole("viewer");
-          setIsRoleLoading(false);
-        }
-      }
-    }
-
-    void loadRole();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [activeProject]);
 
   const showAssignedLine =
     currentRole === "admin" || currentRole === "planner";

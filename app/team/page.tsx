@@ -7,7 +7,45 @@ import { Check, Copy, Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { displayUserId } from "@/lib/admin/credentials";
 import { useActiveProject } from "@/lib/hooks/useActiveProject";
-import { useProjectRole } from "@/lib/hooks/useProjectRole";
+import { useCurrentUser } from "@/lib/contexts/UserContext";
+
+const TEAM_PAGE_BG_CLASS =
+  "relative min-h-full w-full bg-gradient-to-br from-[#e8f6f7] via-[#eaf4ff] to-[#f0f9ed] dark:bg-none dark:bg-[#0a1420]";
+
+const TEAM_CARD_BASE =
+  "rounded-xl border border-zinc-200 bg-white shadow-lg dark:border-zinc-200/30 dark:bg-white/95 dark:shadow-xl dark:shadow-black/30";
+
+const TEAM_FLOATING_CARD_CLASS = `${TEAM_CARD_BASE} border-l-4 border-l-[#359FAB] shadow-black/5`;
+
+const TEAM_TABLE_CARD_CLASS =
+  "w-full overflow-x-auto rounded-xl border border-zinc-200 border-l-4 border-l-[#54B5FB] bg-white shadow-lg shadow-[#54B5FB]/15 dark:border-zinc-200/30 dark:bg-white/95 dark:shadow-xl dark:shadow-black/30";
+
+const TEAM_EMERALD_CARD_CLASS = `${TEAM_CARD_BASE} border-l-4 border-l-emerald-500 shadow-emerald-500/10`;
+
+const TEAM_FORM_FIELD_CLASS =
+  "w-full rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:opacity-50 dark:border-zinc-200 dark:bg-white dark:text-zinc-900";
+
+function TeamPageShell({
+  children,
+  contentClassName = "relative mx-auto w-full max-w-7xl flex-1 p-6 sm:p-10",
+}: {
+  children: React.ReactNode;
+  contentClassName?: string;
+}) {
+  return (
+    <main className={TEAM_PAGE_BG_CLASS}>
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 hidden dark:block"
+        style={{
+          background:
+            "radial-gradient(circle at 30% 20%, rgba(53,159,171,0.3) 0%, transparent 50%), radial-gradient(circle at 80% 80%, rgba(84,181,251,0.25) 0%, transparent 50%)",
+        }}
+      />
+      <div className={contentClassName}>{children}</div>
+    </main>
+  );
+}
 
 type TabId = "create" | "reassign" | "members";
 
@@ -47,11 +85,14 @@ const ROLE_OPTIONS: Array<{ value: TeamRole; label: string }> = [
 ];
 
 const ROLE_BADGE_STYLES: Record<string, string> = {
-  admin: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
-  planner: "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300",
+  admin:
+    "bg-zinc-100 text-zinc-700 dark:border dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100",
+  planner:
+    "bg-blue-100 text-blue-700 dark:border dark:border-blue-600 dark:bg-blue-600 dark:text-white",
   site_engineer:
-    "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300",
-  viewer: "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400",
+    "bg-amber-100 text-amber-800 dark:border dark:border-amber-600 dark:bg-amber-600 dark:text-white",
+  viewer:
+    "bg-gray-100 text-gray-600 dark:border dark:border-zinc-600 dark:bg-zinc-600 dark:text-white",
 };
 
 function formatRole(role: string): string {
@@ -123,7 +164,7 @@ function CopyButton({ value, label }: { value: string; label: string }) {
     <button
       type="button"
       onClick={() => void handleCopy()}
-      className="inline-flex items-center gap-1 rounded-md border border-zinc-200 px-2 py-1 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+      className="inline-flex items-center gap-1 rounded-md border border-zinc-200 px-2 py-1 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-200 dark:bg-white dark:text-zinc-700 dark:hover:bg-zinc-50"
       aria-label={`Copy ${label}`}
     >
       {copied ? (
@@ -139,7 +180,13 @@ function CopyButton({ value, label }: { value: string; label: string }) {
 export default function TeamPage() {
   const router = useRouter();
   const { activeProject, isLoading: isProjectLoading } = useActiveProject();
-  const { role, isRoleLoading } = useProjectRole();
+  const {
+    projectRole: role,
+    projectId,
+    isLoading: isUserContextLoading,
+    isProjectRoleLoading,
+  } = useCurrentUser();
+  const isRoleLoading = isUserContextLoading || isProjectRoleLoading;
 
   const [activeTab, setActiveTab] = useState<TabId>("create");
 
@@ -260,21 +307,34 @@ export default function TeamPage() {
   }, []);
 
   useEffect(() => {
-    if (!activeProject) {
+    if (!activeProject || !projectId || isRoleLoading) {
       setEngineerOptions([]);
       return;
     }
 
-    void loadSiteEngineers(activeProject.id);
-  }, [activeProject, loadSiteEngineers]);
-
-  useEffect(() => {
-    if (!activeProject || activeTab !== "members") {
+    if (!role || !["admin", "planner"].includes(role)) {
       return;
     }
 
-    void loadTeamMembers(activeProject.id);
-  }, [activeProject, activeTab, loadTeamMembers]);
+    void loadSiteEngineers(projectId);
+  }, [activeProject, projectId, isRoleLoading, role, loadSiteEngineers]);
+
+  useEffect(() => {
+    if (
+      !activeProject ||
+      !projectId ||
+      isRoleLoading ||
+      activeTab !== "members"
+    ) {
+      return;
+    }
+
+    if (!role || !["admin", "planner"].includes(role)) {
+      return;
+    }
+
+    void loadTeamMembers(projectId);
+  }, [activeProject, projectId, isRoleLoading, role, activeTab, loadTeamMembers]);
 
   useEffect(() => {
     if (createRole !== "viewer") {
@@ -408,50 +468,50 @@ export default function TeamPage() {
 
   if (isRoleLoading || isProjectLoading) {
     return (
-      <main className="mx-auto flex min-h-[50vh] w-full max-w-7xl items-center justify-center p-6 sm:p-10">
+      <TeamPageShell contentClassName="relative mx-auto flex min-h-[50vh] w-full max-w-7xl items-center justify-center p-6 sm:p-10">
         <Loader2
-          className="h-8 w-8 animate-spin text-zinc-400"
+          className="h-8 w-8 animate-spin text-[#359FAB] dark:text-[#54B5FB]"
           aria-label="Loading"
         />
-      </main>
+      </TeamPageShell>
     );
   }
 
   if (!role || !["admin", "planner"].includes(role)) {
     return (
-      <main className="mx-auto flex min-h-[50vh] w-full max-w-7xl items-center justify-center p-6 sm:p-10">
+      <TeamPageShell contentClassName="relative mx-auto flex min-h-[50vh] w-full max-w-7xl items-center justify-center p-6 sm:p-10">
         <Loader2
-          className="h-8 w-8 animate-spin text-zinc-400"
+          className="h-8 w-8 animate-spin text-[#359FAB] dark:text-[#54B5FB]"
           aria-label="Redirecting"
         />
-      </main>
+      </TeamPageShell>
     );
   }
 
   if (!activeProject) {
     return (
-      <main className="mx-auto w-full max-w-7xl flex-1 p-6 sm:p-10">
-        <div className="rounded-xl border border-zinc-200 bg-white p-8 text-center dark:border-zinc-800 dark:bg-zinc-950">
-          <p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
+      <TeamPageShell>
+        <div className={`${TEAM_FLOATING_CARD_CLASS} p-8 text-center`}>
+          <p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-500">
             No project selected.
             <br />
             Please select a project to continue.
           </p>
           <Link
             href="/select-project"
-            className="mt-4 inline-flex rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+            className="mt-4 inline-flex rounded-lg bg-[#0a1420] px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-zinc-800"
           >
             Select Project
           </Link>
         </div>
-      </main>
+      </TeamPageShell>
     );
   }
 
   return (
-    <main className="mx-auto w-full max-w-7xl flex-1 p-6 sm:p-10">
+    <TeamPageShell>
       <div className="mb-8">
-        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
+        <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-white sm:text-3xl">
           Team Management
         </h1>
         <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
@@ -459,16 +519,16 @@ export default function TeamPage() {
         </p>
       </div>
 
-      <div className="mb-6 flex flex-wrap gap-2 border-b border-zinc-200 dark:border-zinc-800">
+      <div className="mb-6 flex flex-wrap gap-2">
         {TABS.map((tab) => (
           <button
             key={tab.id}
             type="button"
             onClick={() => setActiveTab(tab.id)}
-            className={`-mb-px rounded-t-lg px-4 py-2.5 text-sm font-medium transition-colors ${
+            className={`rounded-md px-4 py-2.5 text-sm font-medium transition-colors ${
               activeTab === tab.id
-                ? "border-b-2 border-zinc-900 text-zinc-900 dark:border-zinc-100 dark:text-zinc-100"
-                : "text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200"
+                ? "bg-zinc-900 text-white dark:bg-zinc-900 dark:text-white"
+                : "bg-white text-zinc-700 ring-1 ring-zinc-200 hover:bg-zinc-50 dark:bg-white/90 dark:text-zinc-700 dark:ring-zinc-200 dark:hover:bg-white"
             }`}
           >
             {tab.label}
@@ -477,11 +537,11 @@ export default function TeamPage() {
       </div>
 
       {activeTab === "create" && (
-        <section className="max-w-xl">
-          <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+        <section className={`max-w-xl ${TEAM_FLOATING_CARD_CLASS} p-6`}>
+          <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-900">
             Add Member
           </h2>
-          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-500">
             Create a new Site Engineer or Viewer for this project.
           </p>
 
@@ -489,7 +549,7 @@ export default function TeamPage() {
             <div>
               <label
                 htmlFor="create-name"
-                className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-500"
               >
                 Full Name
               </label>
@@ -500,14 +560,14 @@ export default function TeamPage() {
                 value={createName}
                 onChange={(event) => setCreateName(event.target.value)}
                 disabled={isCreating}
-                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+                className={TEAM_FORM_FIELD_CLASS}
               />
             </div>
 
             <div>
               <label
                 htmlFor="create-role"
-                className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-500"
               >
                 Role
               </label>
@@ -518,7 +578,7 @@ export default function TeamPage() {
                   setCreateRole(event.target.value as TeamRole)
                 }
                 disabled={isCreating}
-                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+                className={TEAM_FORM_FIELD_CLASS}
               >
                 {ROLE_OPTIONS.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -532,7 +592,7 @@ export default function TeamPage() {
               <div>
                 <label
                   htmlFor="create-engineer"
-                  className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                  className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-500"
                 >
                   Assign to Site Engineer
                 </label>
@@ -546,7 +606,7 @@ export default function TeamPage() {
                     isLoadingEngineers ||
                     engineerOptions.length === 0
                   }
-                  className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+                  className={TEAM_FORM_FIELD_CLASS}
                 >
                   <option value="" disabled>
                     {isLoadingEngineers
@@ -576,7 +636,7 @@ export default function TeamPage() {
                 isCreating ||
                 (createRole === "viewer" && !createEngineerId)
               }
-              className="inline-flex items-center gap-2 rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+              className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-[#54B5FB] dark:text-white dark:hover:bg-[#3a9ce8]"
             >
               {isCreating && (
                 <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
@@ -586,25 +646,27 @@ export default function TeamPage() {
           </form>
 
           {createdCredentials && (
-            <div className="mt-6 rounded-xl border border-green-200 bg-green-50 p-4 dark:border-green-900/50 dark:bg-green-950/30">
-              <p className="text-sm font-semibold text-green-900 dark:text-green-200">
+            <div className={`${TEAM_EMERALD_CARD_CLASS} mt-6 p-4`}>
+              <p className="text-sm font-semibold text-green-800 dark:text-green-800">
                 User created successfully
               </p>
               {createWarning && (
-                <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
+                <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-200 dark:bg-amber-50 dark:text-amber-900">
                   {createWarning}
                 </p>
               )}
-              <p className="mt-3 text-xs text-green-800 dark:text-green-300">
+              <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-500">
                 Save these credentials — password cannot be recovered
               </p>
               <dl className="mt-4 space-y-3 text-sm">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <dt className="font-medium text-green-900 dark:text-green-200">
+                  <dt className="font-medium text-zinc-900 dark:text-zinc-900">
                     User ID
                   </dt>
-                  <dd className="flex items-center gap-2 font-mono text-green-800 dark:text-green-300">
-                    {createdCredentials.user_id}
+                  <dd className="flex items-center gap-2">
+                    <span className="font-mono text-sm font-medium text-zinc-900 dark:text-zinc-900">
+                      {createdCredentials.user_id}
+                    </span>
                     <CopyButton
                       value={createdCredentials.user_id}
                       label="User ID"
@@ -612,11 +674,13 @@ export default function TeamPage() {
                   </dd>
                 </div>
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <dt className="font-medium text-green-900 dark:text-green-200">
+                  <dt className="font-medium text-zinc-900 dark:text-zinc-900">
                     Password
                   </dt>
-                  <dd className="flex items-center gap-2 font-mono text-green-800 dark:text-green-300">
-                    {createdCredentials.password}
+                  <dd className="flex items-center gap-2">
+                    <span className="font-mono text-sm font-medium text-zinc-900 dark:text-zinc-900">
+                      {createdCredentials.password}
+                    </span>
                     <CopyButton
                       value={createdCredentials.password}
                       label="Password"
@@ -630,11 +694,11 @@ export default function TeamPage() {
       )}
 
       {activeTab === "reassign" && (
-        <section className="max-w-xl">
-          <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+        <section className={`max-w-xl ${TEAM_FLOATING_CARD_CLASS} p-6`}>
+          <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-900">
             Reassign User
           </h2>
-          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-500">
             Add an existing user to this project with a chosen role.
           </p>
 
@@ -642,7 +706,7 @@ export default function TeamPage() {
             <div>
               <label
                 htmlFor="reassign-user-id"
-                className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-500"
               >
                 User ID
               </label>
@@ -654,14 +718,14 @@ export default function TeamPage() {
                 value={reassignUserId}
                 onChange={(event) => setReassignUserId(event.target.value)}
                 disabled={isReassigning}
-                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+                className={TEAM_FORM_FIELD_CLASS}
               />
             </div>
 
             <div>
               <label
                 htmlFor="reassign-role"
-                className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-500"
               >
                 Role in this project
               </label>
@@ -672,7 +736,7 @@ export default function TeamPage() {
                   setReassignRole(event.target.value as TeamRole)
                 }
                 disabled={isReassigning}
-                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+                className={TEAM_FORM_FIELD_CLASS}
               >
                 {ROLE_OPTIONS.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -686,7 +750,7 @@ export default function TeamPage() {
               <div>
                 <label
                   htmlFor="reassign-engineer"
-                  className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                  className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-500"
                 >
                   Assign to Site Engineer
                 </label>
@@ -702,7 +766,7 @@ export default function TeamPage() {
                     isLoadingEngineers ||
                     engineerOptions.length === 0
                   }
-                  className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+                  className={TEAM_FORM_FIELD_CLASS}
                 >
                   <option value="" disabled>
                     {isLoadingEngineers
@@ -727,13 +791,13 @@ export default function TeamPage() {
             )}
 
             {reassignSuccess && (
-              <p className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800 dark:border-green-900/50 dark:bg-green-950/40 dark:text-green-200">
+              <p className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800 dark:border-green-200 dark:bg-green-50 dark:text-green-800">
                 {reassignSuccess}
               </p>
             )}
 
             {reassignWarning && (
-              <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
+              <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-200 dark:bg-amber-50 dark:text-amber-900">
                 {reassignWarning}
               </p>
             )}
@@ -744,7 +808,7 @@ export default function TeamPage() {
                 isReassigning ||
                 (reassignRole === "viewer" && !reassignEngineerId)
               }
-              className="inline-flex items-center gap-2 rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+              className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-[#54B5FB] dark:text-white dark:hover:bg-[#3a9ce8]"
             >
               {isReassigning && (
                 <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
@@ -756,16 +820,16 @@ export default function TeamPage() {
       )}
 
       {activeTab === "members" && (
-        <section>
-          <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+        <section className={`${TEAM_FLOATING_CARD_CLASS} p-6`}>
+          <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-900">
             Team Members
           </h2>
-          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-500">
             All members assigned to this project.
           </p>
 
           {membersError && (
-            <p className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
+            <p className="mt-4 rounded-lg border border-red-200 border-l-4 border-l-red-500 bg-white px-4 py-3 text-sm text-red-800 shadow-lg shadow-red-500/10 dark:bg-white/95">
               Failed to load team members: {membersError}
             </p>
           )}
@@ -773,44 +837,46 @@ export default function TeamPage() {
           {isLoadingMembers ? (
             <div className="mt-8 flex justify-center">
               <Loader2
-                className="h-8 w-8 animate-spin text-zinc-400"
+                className="h-8 w-8 animate-spin text-[#359FAB] dark:text-[#54B5FB]"
                 aria-label="Loading team members"
               />
             </div>
           ) : teamMembers.length === 0 ? (
-            <p className="mt-8 text-sm text-zinc-500 dark:text-zinc-400">
+            <p className="mt-8 text-sm text-zinc-500 dark:text-zinc-500">
               No team members yet.
             </p>
           ) : (
-            <div className="mt-6 overflow-x-auto rounded-xl border border-zinc-200 dark:border-zinc-800">
-              <table className="min-w-full divide-y divide-zinc-200 text-sm dark:divide-zinc-800">
-                <thead className="bg-zinc-50 dark:bg-zinc-900/50">
+            <div className={`mt-6 ${TEAM_TABLE_CARD_CLASS}`}>
+              <table className="min-w-full divide-y divide-zinc-200 text-sm dark:divide-zinc-200">
+                <thead className="bg-zinc-50">
                   <tr>
-                    <th className="whitespace-nowrap px-4 py-3 text-left font-semibold text-zinc-900 dark:text-zinc-100">
+                    <th className="whitespace-nowrap px-4 py-3 text-left font-semibold text-zinc-900 dark:text-zinc-900">
                       Name
                     </th>
-                    <th className="whitespace-nowrap px-4 py-3 text-left font-semibold text-zinc-900 dark:text-zinc-100">
+                    <th className="whitespace-nowrap px-4 py-3 text-left font-semibold text-zinc-900 dark:text-zinc-900">
                       User ID
                     </th>
-                    <th className="whitespace-nowrap px-4 py-3 text-left font-semibold text-zinc-900 dark:text-zinc-100">
+                    <th className="whitespace-nowrap px-4 py-3 text-left font-semibold text-zinc-900 dark:text-zinc-900">
                       Role
                     </th>
-                    <th className="whitespace-nowrap px-4 py-3 text-left font-semibold text-zinc-900 dark:text-zinc-100">
+                    <th className="whitespace-nowrap px-4 py-3 text-left font-semibold text-zinc-900 dark:text-zinc-900">
                       Status
                     </th>
-                    <th className="whitespace-nowrap px-4 py-3 text-left font-semibold text-zinc-900 dark:text-zinc-100">
+                    <th className="whitespace-nowrap px-4 py-3 text-left font-semibold text-zinc-900 dark:text-zinc-900">
                       Joined
                     </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-zinc-200 bg-white dark:divide-zinc-800 dark:bg-zinc-950">
+                <tbody className="divide-y divide-zinc-200 bg-white dark:divide-zinc-200">
                   {teamMembers.map((member) => (
                     <tr key={member.user_id}>
-                      <td className="whitespace-nowrap px-4 py-3 text-zinc-900 dark:text-zinc-100">
+                      <td className="whitespace-nowrap px-4 py-3 font-medium text-zinc-900 dark:text-zinc-900">
                         {member.name}
                       </td>
-                      <td className="whitespace-nowrap px-4 py-3 font-mono text-zinc-700 dark:text-zinc-300">
-                        {displayUserId(member.email)}
+                      <td className="whitespace-nowrap px-4 py-3">
+                        <span className="font-mono text-xs font-medium text-zinc-900 dark:text-zinc-900">
+                          {displayUserId(member.email)}
+                        </span>
                       </td>
                       <td className="whitespace-nowrap px-4 py-3">
                         <span
@@ -826,17 +892,19 @@ export default function TeamPage() {
                         <span
                           className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${
                             member.is_active
-                              ? "bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300"
-                              : "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300"
+                              ? "bg-green-100 text-green-800 dark:border dark:border-emerald-600 dark:bg-emerald-600 dark:text-white"
+                              : "bg-red-100 text-red-800 dark:border dark:border-zinc-600/50 dark:bg-zinc-800/60 dark:text-zinc-300"
                           }`}
                         >
                           {member.is_active ? "Active" : "Inactive"}
                         </span>
                       </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-zinc-700 dark:text-zinc-300">
-                        {member.joined_at
-                          ? formatDate(member.joined_at)
-                          : "—"}
+                      <td className="whitespace-nowrap px-4 py-3">
+                        <span className="text-zinc-900 dark:text-zinc-900">
+                          {member.joined_at
+                            ? formatDate(member.joined_at)
+                            : "—"}
+                        </span>
                       </td>
                     </tr>
                   ))}
@@ -846,6 +914,6 @@ export default function TeamPage() {
           )}
         </section>
       )}
-    </main>
+    </TeamPageShell>
   );
 }

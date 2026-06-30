@@ -10,6 +10,37 @@ import { createClient } from "@/lib/supabase/client";
 import { displayUserId } from "@/lib/admin/credentials";
 import { useActiveProject } from "@/lib/hooks/useActiveProject";
 
+const ACTIVITIES_PAGE_BG_CLASS =
+  "relative min-h-full w-full bg-gradient-to-br from-[#e8f6f7] via-[#eaf4ff] to-[#f0f9ed] dark:bg-none dark:bg-[#0a1420]";
+
+const ACTIVITIES_TABLE_CARD_CLASS =
+  "w-full rounded-xl border border-zinc-200 border-l-4 border-l-[#54B5FB] bg-white shadow-lg shadow-[#54B5FB]/15 dark:border-zinc-200/30 dark:bg-white/95 dark:shadow-xl dark:shadow-black/30";
+
+const ACTIVITIES_FLOATING_CARD_CLASS =
+  "rounded-xl border border-zinc-200 border-l-4 border-l-[#359FAB] bg-white shadow-lg shadow-black/5 dark:border-zinc-200/30 dark:bg-white/95 dark:shadow-xl dark:shadow-black/30";
+
+function ActivitiesPageShell({
+  children,
+  contentClassName = "relative mx-auto w-full max-w-7xl flex-1 p-6 sm:p-10",
+}: {
+  children: React.ReactNode;
+  contentClassName?: string;
+}) {
+  return (
+    <main className={ACTIVITIES_PAGE_BG_CLASS}>
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 hidden dark:block"
+        style={{
+          background:
+            "radial-gradient(circle at 30% 20%, rgba(53,159,171,0.3) 0%, transparent 50%), radial-gradient(circle at 80% 80%, rgba(84,181,251,0.25) 0%, transparent 50%)",
+        }}
+      />
+      <div className={contentClassName}>{children}</div>
+    </main>
+  );
+}
+
 type Activity = {
   activity_id: string;
   activity_name: string;
@@ -207,7 +238,7 @@ function MyActivitiesTable({
   );
 
   return (
-    <div className="w-full rounded-lg border border-zinc-200 shadow-sm dark:border-zinc-800">
+    <div className={ACTIVITIES_TABLE_CARD_CLASS}>
       <div
         ref={innerRef}
         onScroll={handleInnerScroll}
@@ -215,44 +246,44 @@ function MyActivitiesTable({
       >
         <table
           ref={tableRef}
-          className="min-w-full divide-y divide-zinc-200 text-left text-sm dark:divide-zinc-800"
+          className="min-w-full divide-y divide-zinc-200 text-left text-sm dark:divide-zinc-200"
         >
-        <thead className="bg-zinc-50 dark:bg-zinc-900/60">
+        <thead className="bg-zinc-50">
           <tr>
-            <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+            <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-900">
               Activity ID
             </th>
-            <th className="min-w-[12rem] whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+            <th className="min-w-[12rem] whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-900">
               Activity Name
             </th>
-            <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+            <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-900">
               Status
             </th>
-            <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+            <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-900">
               Progress
             </th>
-            <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+            <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-900">
               Start Date
             </th>
-            <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+            <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-900">
               Finish Date
             </th>
-            <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+            <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-900">
               Delay Days
             </th>
             {showUpdateColumn && (
-              <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+              <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-900">
                 Update
               </th>
             )}
             {!showUpdateColumn && showHistoryButton && (
-              <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+              <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-900">
                 Actions
               </th>
             )}
           </tr>
         </thead>
-        <tbody className="divide-y divide-zinc-200 bg-white dark:divide-zinc-800 dark:bg-zinc-950">
+        <tbody className="divide-y divide-zinc-200 bg-white dark:divide-zinc-200">
           {activities.map((activity) => {
             const isSaving = savingMap[activity.activity_id] === true;
             const feedback = feedbackMap[activity.activity_id] ?? null;
@@ -264,27 +295,27 @@ function MyActivitiesTable({
             return (
               <tr
                 key={activity.activity_id}
-                className="transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-900/40"
+                className="transition-colors hover:bg-zinc-50"
               >
-                <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-zinc-700 dark:text-zinc-300">
+                <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-zinc-700 dark:text-zinc-500">
                   {activity.activity_id}
                 </td>
-                <td className="whitespace-nowrap px-4 py-3 font-medium text-zinc-900 dark:text-zinc-100">
+                <td className="whitespace-nowrap px-4 py-3 font-medium text-zinc-900 dark:text-zinc-900">
                   {activity.activity_name}
                 </td>
                 <td className="whitespace-nowrap px-4 py-3">
                   <SeStatusBadge status={activity.status} />
                 </td>
-                <td className="whitespace-nowrap px-4 py-3 text-zinc-700 dark:text-zinc-300">
+                <td className="whitespace-nowrap px-4 py-3 text-zinc-700 dark:text-zinc-500">
                   {progressMap[activity.activity_id] ?? activity.progress}%
                 </td>
-                <td className="whitespace-nowrap px-4 py-3 text-zinc-700 dark:text-zinc-300">
+                <td className="whitespace-nowrap px-4 py-3 text-zinc-700 dark:text-zinc-500">
                   {formatDate(activity.start_date)}
                 </td>
-                <td className="whitespace-nowrap px-4 py-3 text-zinc-700 dark:text-zinc-300">
+                <td className="whitespace-nowrap px-4 py-3 text-zinc-700 dark:text-zinc-500">
                   {formatDate(activity.finish_date)}
                 </td>
-                <td className="whitespace-nowrap px-4 py-3 text-zinc-700 dark:text-zinc-300">
+                <td className="whitespace-nowrap px-4 py-3 text-zinc-700 dark:text-zinc-500">
                   {activity.delay_days ?? "—"}
                 </td>
                 {showUpdateColumn && (
@@ -311,7 +342,7 @@ function MyActivitiesTable({
                             onProgressChange(activity.activity_id, nextValue);
                           }}
                           disabled={isSaving}
-                          className="w-20 rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm text-zinc-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+                          className="w-20 rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm text-zinc-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:opacity-50 dark:border-zinc-200 dark:bg-white dark:text-zinc-900"
                         />
                         <button
                           type="button"
@@ -327,7 +358,7 @@ function MyActivitiesTable({
                             onClick={() =>
                               onOpenHistory(activity.activity_id)
                             }
-                            className="rounded border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
+                            className="rounded border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-200 dark:bg-white dark:text-zinc-700 dark:hover:bg-zinc-50"
                           >
                             History
                           </button>
@@ -361,7 +392,7 @@ function MyActivitiesTable({
                     <button
                       type="button"
                       onClick={() => onOpenHistory(activity.activity_id)}
-                      className="rounded border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
+                      className="rounded border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-200 dark:bg-white dark:text-zinc-700 dark:hover:bg-zinc-50"
                     >
                       History
                     </button>
@@ -377,7 +408,7 @@ function MyActivitiesTable({
       <div
         ref={outerRef}
         onScroll={handleOuterScroll}
-        className="sticky bottom-0 z-10 overflow-x-auto overflow-y-hidden border-t border-zinc-200 bg-white scrollbar scrollbar-thin scrollbar-thumb-rounded scrollbar-thumb-zinc-400 scrollbar-track-zinc-100 dark:border-zinc-800 dark:bg-zinc-950 dark:scrollbar-track-zinc-800 dark:scrollbar-thumb-zinc-600"
+        className="sticky bottom-0 z-10 overflow-x-auto overflow-y-hidden border-t border-zinc-200 bg-white scrollbar scrollbar-thin scrollbar-thumb-rounded scrollbar-thumb-zinc-400 scrollbar-track-zinc-100 dark:border-zinc-200 dark:bg-white dark:scrollbar-track-zinc-100 dark:scrollbar-thumb-zinc-400"
       >
         <div aria-hidden="true" style={{ width: tableWidth }} className="h-px" />
       </div>
@@ -526,12 +557,12 @@ function ActivityHistoryPanel({
         role="dialog"
         aria-modal="true"
         aria-labelledby="activity-history-title"
-        className="relative z-10 flex h-full w-full max-w-md flex-col border-l border-zinc-200 bg-white shadow-xl dark:border-zinc-800 dark:bg-zinc-950"
+        className="relative z-10 flex h-full w-full max-w-md flex-col border-l border-zinc-200 bg-white shadow-xl dark:border-zinc-200/30 dark:bg-white/95"
       >
-        <div className="flex items-start justify-between border-b border-zinc-200 px-5 py-4 dark:border-zinc-800">
+        <div className="flex items-start justify-between border-b border-zinc-200 px-5 py-4 dark:border-zinc-200">
           <h2
             id="activity-history-title"
-            className="pr-4 text-lg font-semibold text-zinc-900 dark:text-zinc-100"
+            className="pr-4 text-lg font-semibold text-zinc-900 dark:text-zinc-900"
           >
             Activity History — {activityId}
           </h2>
@@ -539,7 +570,7 @@ function ActivityHistoryPanel({
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="rounded-md p-1 text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+            className="rounded-md p-1 text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-500 dark:hover:bg-zinc-100 dark:hover:text-zinc-900"
           >
             <X className="h-5 w-5" aria-hidden="true" />
           </button>
@@ -547,7 +578,7 @@ function ActivityHistoryPanel({
 
         <div className="flex-1 overflow-y-auto px-5 py-4">
           {isLoading ? (
-            <div className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
+            <div className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-500">
               <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
               Loading history...
             </div>
@@ -556,7 +587,7 @@ function ActivityHistoryPanel({
               {error}
             </p>
           ) : entries.length === 0 ? (
-            <p className="text-sm text-zinc-600 dark:text-zinc-400">
+            <p className="text-sm text-zinc-600 dark:text-zinc-500">
               No history recorded for this activity yet.
             </p>
           ) : (
@@ -565,15 +596,15 @@ function ActivityHistoryPanel({
                 <div key={entry.id} className="relative pb-6 last:pb-0">
                   <span
                     aria-hidden="true"
-                    className="absolute -left-[17px] top-1.5 h-3 w-3 rounded-full border-2 border-zinc-300 bg-white dark:border-zinc-600 dark:bg-zinc-950"
+                    className="absolute -left-[17px] top-1.5 h-3 w-3 rounded-full border-2 border-zinc-300 bg-white dark:border-zinc-300 dark:bg-white"
                   />
-                  <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                  <p className="text-sm font-medium text-zinc-900 dark:text-zinc-900">
                     Changed by: {entry.changed_by_name}
                   </p>
-                  <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                  <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-500">
                     {formatHistoryDateTime(entry.changed_at)}
                   </p>
-                  <div className="mt-2 space-y-1 text-sm text-zinc-700 dark:text-zinc-300">
+                  <div className="mt-2 space-y-1 text-sm text-zinc-700 dark:text-zinc-700">
                     {entry.progress_from !== null &&
                       entry.progress_to !== null && (
                         <p>
@@ -818,8 +849,8 @@ function FilterButton({
       onClick={() => onSelect(value)}
       className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
         isActive
-          ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
-          : "bg-white text-zinc-700 ring-1 ring-zinc-200 hover:bg-zinc-50 dark:bg-zinc-950 dark:text-zinc-200 dark:ring-zinc-700 dark:hover:bg-zinc-900"
+          ? "bg-zinc-900 text-white dark:bg-zinc-900 dark:text-white"
+          : "bg-white text-zinc-700 ring-1 ring-zinc-200 hover:bg-zinc-50 dark:bg-white/90 dark:text-zinc-700 dark:ring-zinc-200 dark:hover:bg-white"
       }`}
     >
       {label}
@@ -848,8 +879,8 @@ function SortButton({
       onClick={() => onSort(field)}
       className={`inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
         isActive
-          ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
-          : "bg-white text-zinc-700 ring-1 ring-zinc-200 hover:bg-zinc-50 dark:bg-zinc-950 dark:text-zinc-200 dark:ring-zinc-700 dark:hover:bg-zinc-900"
+          ? "bg-zinc-900 text-white dark:bg-zinc-900 dark:text-white"
+          : "bg-white text-zinc-700 ring-1 ring-zinc-200 hover:bg-zinc-50 dark:bg-white/90 dark:text-zinc-700 dark:ring-zinc-200 dark:hover:bg-white"
       }`}
     >
       {label}
@@ -901,39 +932,39 @@ function AssignActivityModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="assign-activity-title"
-        className="relative z-10 max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-zinc-200 bg-white p-6 shadow-xl dark:border-zinc-800 dark:bg-zinc-950"
+        className="relative z-10 max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-zinc-200 bg-white p-6 shadow-xl dark:border-zinc-200/30 dark:bg-white/95"
       >
         <h2
           id="assign-activity-title"
-          className="text-lg font-semibold text-zinc-900 dark:text-zinc-100"
+          className="text-lg font-semibold text-zinc-900 dark:text-zinc-900"
         >
           {isReassign ? "Reassign Activity" : "Assign Activity"}
         </h2>
 
-        <dl className="mt-4 space-y-2 rounded-lg bg-zinc-50 p-4 text-sm dark:bg-zinc-900/60">
+        <dl className="mt-4 space-y-2 rounded-lg bg-zinc-50 p-4 text-sm dark:bg-zinc-50">
           <div className="flex justify-between gap-4">
-            <dt className="text-zinc-500 dark:text-zinc-400">Activity ID</dt>
-            <dd className="font-mono text-zinc-900 dark:text-zinc-100">
+            <dt className="text-zinc-500 dark:text-zinc-500">Activity ID</dt>
+            <dd className="font-mono text-zinc-900 dark:text-zinc-900">
               {activity.activity_id}
             </dd>
           </div>
           <div className="flex justify-between gap-4">
-            <dt className="text-zinc-500 dark:text-zinc-400">Activity Name</dt>
-            <dd className="text-right text-zinc-900 dark:text-zinc-100">
+            <dt className="text-zinc-500 dark:text-zinc-500">Activity Name</dt>
+            <dd className="text-right text-zinc-900 dark:text-zinc-900">
               {activity.activity_name}
             </dd>
           </div>
           <div className="flex items-center justify-between gap-4">
-            <dt className="text-zinc-500 dark:text-zinc-400">Status</dt>
+            <dt className="text-zinc-500 dark:text-zinc-500">Status</dt>
             <dd>
               <StatusBadge status={activity.status} />
             </dd>
           </div>
           <div className="flex justify-between gap-4">
-            <dt className="text-zinc-500 dark:text-zinc-400">
+            <dt className="text-zinc-500 dark:text-zinc-500">
               Planned Finish Date
             </dt>
-            <dd className="text-zinc-900 dark:text-zinc-100">
+            <dd className="text-zinc-900 dark:text-zinc-900">
               {formatDate(activity.finish_date)}
             </dd>
           </div>
@@ -942,7 +973,7 @@ function AssignActivityModal({
         <div className="mt-5">
           <label
             htmlFor="assign-engineer"
-            className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+            className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-700"
           >
             Select Engineer
           </label>
@@ -952,7 +983,7 @@ function AssignActivityModal({
             value={selectedEngineer}
             onChange={(event) => onSelectEngineer(event.target.value)}
             disabled={isAssigning}
-            className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+            className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:opacity-50 dark:border-zinc-200 dark:bg-white dark:text-zinc-900"
           >
             <option value="">Select an engineer...</option>
             {engineers.map((engineer) => (
@@ -999,7 +1030,7 @@ function AssignActivityModal({
             type="button"
             onClick={onCancel}
             disabled={isAssigning}
-            className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
+            className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-200 dark:bg-white dark:text-zinc-700 dark:hover:bg-zinc-50"
           >
             Cancel
           </button>
@@ -1092,7 +1123,7 @@ function ActivitiesTable({
   );
 
   return (
-    <div className="w-full rounded-lg border border-zinc-200 shadow-sm dark:border-zinc-800">
+    <div className={ACTIVITIES_TABLE_CARD_CLASS}>
       <div
         ref={innerRef}
         onScroll={handleInnerScroll}
@@ -1100,63 +1131,63 @@ function ActivitiesTable({
       >
         <table
           ref={tableRef}
-          className="min-w-full divide-y divide-zinc-200 text-left text-sm dark:divide-zinc-800"
+          className="min-w-full divide-y divide-zinc-200 text-left text-sm dark:divide-zinc-200"
         >
-          <thead className="bg-zinc-50 dark:bg-zinc-900/60">
+          <thead className="bg-zinc-50">
             <tr>
-              <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+              <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-900">
                 Activity ID
               </th>
-              <th className="min-w-[12rem] whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+              <th className="min-w-[12rem] whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-900">
                 Activity Name
               </th>
-              <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+              <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-900">
                 Status
               </th>
-              <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+              <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-900">
                 Assigned To
               </th>
-              <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+              <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-900">
                 WBS Code
               </th>
-              <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+              <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-900">
                 Start Date
               </th>
-              <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+              <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-900">
                 Finish Date
               </th>
-              <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+              <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-900">
                 Actual Start
               </th>
-              <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+              <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-900">
                 Actual Finish
               </th>
-              <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+              <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-900">
                 Delay
               </th>
-              <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+              <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-900">
                 Duration
               </th>
-              <th className="min-w-[10rem] whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+              <th className="min-w-[10rem] whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-900">
                 Progress
               </th>
               {canManageAssignments && (
-                <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+                <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-900">
                   Actions
                 </th>
               )}
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-200 bg-white dark:divide-zinc-800 dark:bg-zinc-950">
+          <tbody className="divide-y divide-zinc-200 bg-white dark:divide-zinc-200">
             {activities.map((activity) => (
               <tr
                 key={activity.activity_id}
-                className="transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-900/40"
+                className="transition-colors hover:bg-zinc-50"
               >
-                <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-zinc-700 dark:text-zinc-300">
+                <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-zinc-700 dark:text-zinc-500">
                   {formatCell(activity.activity_id)}
                 </td>
-                <td className="whitespace-nowrap px-4 py-3 font-medium text-zinc-900 dark:text-zinc-100">
+                <td className="whitespace-nowrap px-4 py-3 font-medium text-zinc-900 dark:text-zinc-900">
                   {formatCell(activity.activity_name)}
                 </td>
                 <td className="whitespace-nowrap px-4 py-3">
@@ -1184,25 +1215,25 @@ function ActivitiesTable({
                     </span>
                   )}
                 </td>
-                <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-zinc-700 dark:text-zinc-300">
+                <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-zinc-700 dark:text-zinc-500">
                   {formatCell(activity.wbs_code)}
                 </td>
-                <td className="whitespace-nowrap px-4 py-3 text-zinc-700 dark:text-zinc-300">
+                <td className="whitespace-nowrap px-4 py-3 text-zinc-700 dark:text-zinc-500">
                   {formatDate(activity.start_date)}
                 </td>
-                <td className="whitespace-nowrap px-4 py-3 text-zinc-700 dark:text-zinc-300">
+                <td className="whitespace-nowrap px-4 py-3 text-zinc-700 dark:text-zinc-500">
                   {formatDate(activity.finish_date)}
                 </td>
-                <td className="whitespace-nowrap px-4 py-3 text-zinc-700 dark:text-zinc-300">
+                <td className="whitespace-nowrap px-4 py-3 text-zinc-700 dark:text-zinc-500">
                   {formatDate(activity.act_start_date)}
                 </td>
-                <td className="whitespace-nowrap px-4 py-3 text-zinc-700 dark:text-zinc-300">
+                <td className="whitespace-nowrap px-4 py-3 text-zinc-700 dark:text-zinc-500">
                   {formatDate(activity.act_end_date)}
                 </td>
                 <td className="whitespace-nowrap px-4 py-3">
                   <DelayBadge delayDays={activity.delay_days} />
                 </td>
-                <td className="whitespace-nowrap px-4 py-3 text-zinc-700 dark:text-zinc-300">
+                <td className="whitespace-nowrap px-4 py-3 text-zinc-700 dark:text-zinc-500">
                   {formatCell(activity.duration)}
                 </td>
                 <td className="whitespace-nowrap px-4 py-3">
@@ -1217,7 +1248,7 @@ function ActivitiesTable({
                         <button
                           type="button"
                           onClick={() => onOpenAssignModal(activity)}
-                          className="rounded bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 transition-colors hover:bg-amber-100 dark:bg-amber-950/30 dark:text-amber-400 dark:hover:bg-amber-950/50"
+                          className="rounded bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 transition-colors hover:bg-amber-100 dark:border dark:border-[#54B5FB] dark:bg-white dark:text-[#54B5FB] dark:hover:bg-[#54B5FB]/10"
                         >
                           Reassign
                         </button>
@@ -1225,7 +1256,7 @@ function ActivitiesTable({
                         <button
                           type="button"
                           onClick={() => onOpenAssignModal(activity)}
-                          className="rounded bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:bg-blue-950/30 dark:text-blue-300 dark:hover:bg-blue-950/50"
+                          className="rounded bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:bg-[#54B5FB] dark:text-white dark:hover:bg-[#3a9ce8]"
                         >
                           Assign
                         </button>
@@ -1233,7 +1264,7 @@ function ActivitiesTable({
                       <button
                         type="button"
                         onClick={() => onOpenHistory(activity.activity_id)}
-                        className="rounded border border-zinc-300 bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
+                        className="rounded border border-zinc-300 bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-200 dark:bg-white dark:text-zinc-700 dark:hover:bg-zinc-50"
                       >
                         History
                       </button>
@@ -1249,7 +1280,7 @@ function ActivitiesTable({
       <div
         ref={outerRef}
         onScroll={handleOuterScroll}
-        className="sticky bottom-0 z-10 overflow-x-auto overflow-y-hidden border-t border-zinc-200 bg-white scrollbar scrollbar-thin scrollbar-thumb-rounded scrollbar-thumb-zinc-400 scrollbar-track-zinc-100 dark:border-zinc-800 dark:bg-zinc-950 dark:scrollbar-track-zinc-800 dark:scrollbar-thumb-zinc-600"
+        className="sticky bottom-0 z-10 overflow-x-auto overflow-y-hidden border-t border-zinc-200 bg-white scrollbar scrollbar-thin scrollbar-thumb-rounded scrollbar-thumb-zinc-400 scrollbar-track-zinc-100 dark:border-zinc-200 dark:bg-white dark:scrollbar-track-zinc-100 dark:scrollbar-thumb-zinc-400"
       >
         <div aria-hidden="true" style={{ width: tableWidth }} className="h-px" />
       </div>
@@ -1605,52 +1636,52 @@ function PlannerAdminActivitiesView() {
 
   if (isProjectLoading) {
     return (
-      <main className="mx-auto flex min-h-[50vh] w-full max-w-7xl items-center justify-center p-6 sm:p-10">
+      <ActivitiesPageShell contentClassName="relative flex min-h-[50vh] items-center justify-center p-6 sm:p-10">
         <Loader2
-          className="h-8 w-8 animate-spin text-zinc-400"
+          className="h-8 w-8 animate-spin text-[#359FAB] dark:text-[#54B5FB]"
           aria-label="Loading project"
         />
-      </main>
+      </ActivitiesPageShell>
     );
   }
 
   if (!activeProject) {
     return (
-      <main className="mx-auto w-full max-w-7xl flex-1 p-6 sm:p-10">
-        <div className="rounded-xl border border-zinc-200 bg-white p-8 text-center dark:border-zinc-800 dark:bg-zinc-950">
-          <p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
+      <ActivitiesPageShell>
+        <div className={`${ACTIVITIES_FLOATING_CARD_CLASS} p-8 text-center`}>
+          <p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-500">
             No project selected.
             <br />
             Please select a project to continue.
           </p>
           <Link
             href="/select-project"
-            className="mt-4 inline-flex rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+            className="mt-4 inline-flex rounded-lg bg-[#0a1420] px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-zinc-800"
           >
             Select Project
           </Link>
         </div>
-      </main>
+      </ActivitiesPageShell>
     );
   }
 
   if (fetchError) {
     return (
-      <main className="mx-auto w-full max-w-7xl flex-1 p-6 sm:p-10">
-        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
+      <ActivitiesPageShell>
+        <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-white sm:text-3xl">
           Activity Master
         </h1>
-        <p className="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
+        <p className="mt-6 rounded-lg border border-red-200 border-l-4 border-l-red-500 bg-white px-4 py-3 text-sm text-red-800 shadow-lg shadow-red-500/10 dark:bg-white/95">
           Failed to load activities: {fetchError}
         </p>
-      </main>
+      </ActivitiesPageShell>
     );
   }
 
   return (
-    <main className="mx-auto w-full max-w-7xl flex-1 p-6 sm:p-10">
+    <ActivitiesPageShell>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
+        <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-white sm:text-3xl">
           Activity Master
         </h1>
         <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
@@ -1659,7 +1690,7 @@ function PlannerAdminActivitiesView() {
             : `Showing ${sortedActivities.length} of ${activities.length} ${activities.length === 1 ? "activity" : "activities"}`}
         </p>
         <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-          <span className="inline-flex items-center rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+          <span className="inline-flex items-center rounded-full bg-white/70 px-2.5 py-0.5 text-xs font-medium text-[#287a83] shadow-sm ring-1 ring-[#359FAB]/30 dark:bg-white/90 dark:text-zinc-700 dark:ring-zinc-200">
             {activeProject.code} — {activeProject.name}
           </span>
         </p>
@@ -1692,7 +1723,7 @@ function PlannerAdminActivitiesView() {
             onChange={(event) => setSearchQuery(event.target.value)}
             placeholder="Search by Activity ID or Activity Name"
             disabled={isLoading}
-            className="w-full rounded-lg border border-zinc-300 bg-white px-4 py-2.5 text-sm text-zinc-900 shadow-sm outline-none ring-blue-500 placeholder:text-zinc-400 focus:border-blue-500 focus:ring-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-500"
+            className="w-full rounded-lg border border-zinc-300 bg-white px-4 py-2.5 text-sm text-zinc-900 shadow-sm outline-none ring-blue-500 placeholder:text-zinc-400 focus:border-blue-500 focus:ring-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-200 dark:bg-white/95 dark:text-zinc-900 dark:placeholder:text-zinc-500"
           />
         </div>
 
@@ -1718,15 +1749,15 @@ function PlannerAdminActivitiesView() {
       </div>
 
       {isLoading ? (
-        <p className="rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-8 text-center text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-400">
+        <p className="rounded-xl border border-zinc-200 bg-white px-4 py-8 text-center text-sm text-zinc-600 shadow-lg shadow-black/5 dark:border-zinc-200/30 dark:bg-white/95 dark:text-zinc-500 dark:shadow-xl">
           Loading activities...
         </p>
       ) : activities.length === 0 ? (
-        <p className="rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-8 text-center text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-400">
+        <p className="rounded-xl border border-zinc-200 bg-white px-4 py-8 text-center text-sm text-zinc-600 shadow-lg shadow-black/5 dark:border-zinc-200/30 dark:bg-white/95 dark:text-zinc-500 dark:shadow-xl">
           No activities found
         </p>
       ) : sortedActivities.length === 0 ? (
-        <p className="rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-8 text-center text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-400">
+        <p className="rounded-xl border border-zinc-200 bg-white px-4 py-8 text-center text-sm text-zinc-600 shadow-lg shadow-black/5 dark:border-zinc-200/30 dark:bg-white/95 dark:text-zinc-500 dark:shadow-xl">
           No activities match your search or filter.
         </p>
       ) : (
@@ -1752,7 +1783,7 @@ function PlannerAdminActivitiesView() {
                   type="button"
                   onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
                   disabled={currentPage === 1}
-                  className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
+                  className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-200 dark:bg-white/90 dark:text-zinc-700 dark:hover:bg-white"
                 >
                   Previous
                 </button>
@@ -1767,7 +1798,7 @@ function PlannerAdminActivitiesView() {
                     setCurrentPage((page) => Math.min(totalPages, page + 1))
                   }
                   disabled={currentPage === totalPages}
-                  className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
+                  className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-200 dark:bg-white/90 dark:text-zinc-700 dark:hover:bg-white"
                 >
                   Next
                 </button>
@@ -1802,7 +1833,7 @@ function PlannerAdminActivitiesView() {
           onCancel={closeAssignModal}
         />
       )}
-    </main>
+    </ActivitiesPageShell>
   );
 }
 
@@ -1969,26 +2000,26 @@ function SiteEngineerDailyLogSection({ projectId }: { projectId: string }) {
   };
 
   return (
-    <section className="mt-8 rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
-      <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+    <section className={`mt-8 ${ACTIVITIES_FLOATING_CARD_CLASS} p-6`}>
+      <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-900">
         Daily Log
       </h2>
-      <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+      <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-500">
         Record what happened on site today.
       </p>
 
       {isInitializing ? (
-        <div className="mt-6 flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
+        <div className="mt-6 flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-500">
           <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
           Loading daily log...
         </div>
       ) : (
         <>
-          <div className="mt-4 space-y-4 rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900/40">
+          <div className="mt-4 space-y-4 rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-200 dark:bg-zinc-50">
             <div>
               <label
                 htmlFor="se-log-date"
-                className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-700"
               >
                 Date
               </label>
@@ -1998,13 +2029,13 @@ function SiteEngineerDailyLogSection({ projectId }: { projectId: string }) {
                 value={selectedDate}
                 disabled={isAddingLog}
                 onChange={(event) => setSelectedDate(event.target.value)}
-                className="w-full max-w-xs rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+                className="w-full max-w-xs rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:opacity-50 dark:border-zinc-200 dark:bg-white dark:text-zinc-900"
               />
             </div>
             <div>
               <label
                 htmlFor="se-log-note"
-                className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-700"
               >
                 Note
               </label>
@@ -2015,7 +2046,7 @@ function SiteEngineerDailyLogSection({ projectId }: { projectId: string }) {
                 onChange={(event) => setNote(event.target.value)}
                 rows={3}
                 placeholder="What happened on site today?"
-                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:opacity-50 dark:border-zinc-200 dark:bg-white dark:text-zinc-900"
               />
             </div>
             <div className="flex flex-wrap items-center gap-3">
@@ -2042,19 +2073,19 @@ function SiteEngineerDailyLogSection({ projectId }: { projectId: string }) {
 
           <div className="mt-6 space-y-3">
             {dailyLogs.length === 0 ? (
-              <p className="text-sm text-zinc-600 dark:text-zinc-400">
+              <p className="text-sm text-zinc-600 dark:text-zinc-500">
                 No logs yet.
               </p>
             ) : (
               dailyLogs.map((log) => (
                 <div
                   key={log.id}
-                  className="rounded-lg border border-zinc-200 bg-white px-4 py-3 dark:border-zinc-800 dark:bg-zinc-950"
+                  className="rounded-lg border border-zinc-200 bg-white px-4 py-3 dark:border-zinc-200"
                 >
-                  <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                  <p className="text-sm font-medium text-zinc-900 dark:text-zinc-900">
                     {formatDate(log.log_date)}
                   </p>
-                  <p className="mt-2 text-sm text-zinc-700 dark:text-zinc-300">
+                  <p className="mt-2 text-sm text-zinc-700 dark:text-zinc-500">
                     {log.note}
                   </p>
                 </div>
@@ -2162,16 +2193,16 @@ function SiteEngineerMyViewersSection({
   }, [engineerId, projectId]);
 
   return (
-    <section className="mt-8 rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
-      <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+    <section className={`mt-8 ${ACTIVITIES_FLOATING_CARD_CLASS} p-6`}>
+      <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-900">
         My Viewers
       </h2>
-      <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+      <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-500">
         Viewers assigned to your activities.
       </p>
 
       {isLoading ? (
-        <div className="mt-6 flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
+        <div className="mt-6 flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-500">
           <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
           Loading viewers...
         </div>
@@ -2180,35 +2211,35 @@ function SiteEngineerMyViewersSection({
           {fetchError}
         </p>
       ) : viewers.length === 0 ? (
-        <p className="mt-6 text-sm text-zinc-600 dark:text-zinc-400">
+        <p className="mt-6 text-sm text-zinc-600 dark:text-zinc-500">
           No viewers assigned to you yet.
         </p>
       ) : (
-        <div className="mt-6 overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
-          <table className="min-w-full divide-y divide-zinc-200 text-left text-sm dark:divide-zinc-800">
-            <thead className="bg-zinc-50 dark:bg-zinc-900/60">
+        <div className={`mt-6 overflow-x-auto ${ACTIVITIES_TABLE_CARD_CLASS}`}>
+          <table className="min-w-full divide-y divide-zinc-200 text-left text-sm dark:divide-zinc-200">
+            <thead className="bg-zinc-50">
               <tr>
-                <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+                <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-900">
                   Name
                 </th>
-                <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+                <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-900">
                   User ID
                 </th>
-                <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100">
+                <th className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-900">
                   Status
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-200 bg-white dark:divide-zinc-800 dark:bg-zinc-950">
+            <tbody className="divide-y divide-zinc-200 bg-white dark:divide-zinc-200">
               {viewers.map((viewer) => (
                 <tr key={viewer.id}>
-                  <td className="whitespace-nowrap px-4 py-3 font-medium text-zinc-900 dark:text-zinc-100">
+                  <td className="whitespace-nowrap px-4 py-3 font-medium text-zinc-900 dark:text-zinc-900">
                     {viewer.name}
                   </td>
-                  <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-zinc-700 dark:text-zinc-300">
+                  <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-zinc-700 dark:text-zinc-500">
                     {displayUserId(viewer.email)}
                   </td>
-                  <td className="whitespace-nowrap px-4 py-3 text-zinc-700 dark:text-zinc-300">
+                  <td className="whitespace-nowrap px-4 py-3 text-zinc-700 dark:text-zinc-500">
                     {viewer.is_active ? "Active" : "Inactive"}
                   </td>
                 </tr>
@@ -2627,19 +2658,22 @@ export default function ActivitiesPage() {
 
   if (loading) {
     return (
-      <main className="flex min-h-[50vh] items-center justify-center px-6 py-8">
-        <Loader2 className="h-8 w-8 animate-spin text-zinc-500" aria-hidden />
-      </main>
+      <ActivitiesPageShell contentClassName="relative flex min-h-[50vh] items-center justify-center px-6 py-8">
+        <Loader2
+          className="h-8 w-8 animate-spin text-[#359FAB] dark:text-[#54B5FB]"
+          aria-hidden
+        />
+      </ActivitiesPageShell>
     );
   }
 
   if (initError) {
     return (
-      <main className="px-6 py-8">
-        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/50 dark:text-red-200">
+      <ActivitiesPageShell>
+        <div className="rounded-lg border border-red-200 border-l-4 border-l-red-500 bg-white px-4 py-3 text-sm text-red-800 shadow-lg shadow-red-500/10 dark:bg-white/95">
           {initError}
         </div>
-      </main>
+      </ActivitiesPageShell>
     );
   }
 
@@ -2655,24 +2689,24 @@ export default function ActivitiesPage() {
 
   if (isViewer && viewerEngineerMissing) {
     return (
-      <main className="px-6 py-8">
+      <ActivitiesPageShell>
         <header className="mb-6">
-          <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-100">
+          <h1 className="text-2xl font-semibold text-zinc-900 dark:text-white">
             Activities
           </h1>
         </header>
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-8 text-center text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
+        <div className="rounded-lg border border-amber-200 border-l-4 border-l-amber-500 bg-white px-4 py-8 text-center text-sm text-amber-900 shadow-lg shadow-amber-500/10 dark:bg-white/95">
           Your account has not been linked to a Site Engineer yet. Please
           contact your administrator.
         </div>
-      </main>
+      </ActivitiesPageShell>
     );
   }
 
   return (
-    <main className="px-6 py-8">
+    <ActivitiesPageShell>
       <header className="mb-6">
-        <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-100">
+        <h1 className="text-2xl font-semibold text-zinc-900 dark:text-white">
           {isSiteEngineer ? "My Activities" : "Activities"}
         </h1>
         {isSiteEngineer && (
@@ -2683,7 +2717,7 @@ export default function ActivitiesPage() {
       </header>
 
       {activities.length === 0 ? (
-        <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-8 text-center text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-400">
+        <div className="rounded-xl border border-zinc-200 bg-white px-4 py-8 text-center text-sm text-zinc-600 shadow-lg shadow-black/5 dark:border-zinc-200/30 dark:bg-white/95 dark:text-zinc-500 dark:shadow-xl">
           {isSiteEngineer
             ? "No activities have been assigned to you yet."
             : "No activities found."}
@@ -2709,7 +2743,7 @@ export default function ActivitiesPage() {
                       : value === "not_completed"
                         ? "bg-amber-500 text-white"
                         : "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
-                    : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                    : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-white/90 dark:text-zinc-700 dark:hover:bg-white"
                 }`}
               >
                 {label} ({myActivityCounts[value]})
@@ -2718,7 +2752,7 @@ export default function ActivitiesPage() {
           </div>
 
           {filteredMyActivities.length === 0 ? (
-            <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-8 text-center text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-400">
+            <div className="rounded-xl border border-zinc-200 bg-white px-4 py-8 text-center text-sm text-zinc-600 shadow-lg shadow-black/5 dark:border-zinc-200/30 dark:bg-white/95 dark:text-zinc-500 dark:shadow-xl">
               No activities match this filter.
             </div>
           ) : (
@@ -2758,6 +2792,6 @@ export default function ActivitiesPage() {
           />
         </>
       )}
-    </main>
+    </ActivitiesPageShell>
   );
 }

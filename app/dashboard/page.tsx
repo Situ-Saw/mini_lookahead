@@ -20,6 +20,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useActiveProject } from "@/lib/hooks/useActiveProject";
+import { useCurrentUser } from "@/lib/contexts/UserContext";
 
 const MS_PER_DAY = 86_400_000;
 
@@ -708,6 +709,12 @@ function getNetDelayDisplay(netDelay: number | null): {
 
 export default function DashboardPage() {
   const { activeProject, isLoading: isProjectLoading } = useActiveProject();
+  const {
+    projectId,
+    isLoading: isUserContextLoading,
+    isProjectRoleLoading,
+  } = useCurrentUser();
+  const isRoleLoading = isUserContextLoading || isProjectRoleLoading;
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -719,7 +726,7 @@ export default function DashboardPage() {
   }, []);
 
   const loadDashboardData = useCallback(
-    async (isMounted: () => boolean, projectId: string) => {
+    async (isMounted: () => boolean, fetchProjectId: string) => {
     setIsLoading(true);
     setFetchError(null);
 
@@ -729,11 +736,11 @@ export default function DashboardPage() {
         .select(
           "status, start_date, finish_date, delay_days, is_baseline",
         )
-        .eq("project_id", projectId),
+        .eq("project_id", fetchProjectId),
       supabase
         .from("constraints")
         .select("status")
-        .eq("project_id", projectId),
+        .eq("project_id", fetchProjectId),
     ]);
 
     if (!isMounted()) return;
@@ -765,16 +772,16 @@ export default function DashboardPage() {
   );
 
   useEffect(() => {
-    if (!activeProject) return;
+    if (!activeProject || !projectId || isRoleLoading) return;
 
     let mounted = true;
 
-    void loadDashboardData(() => mounted, activeProject.id);
+    void loadDashboardData(() => mounted, projectId);
 
     return () => {
       mounted = false;
     };
-  }, [loadDashboardData, refreshKey, activeProject]);
+  }, [loadDashboardData, refreshKey, activeProject, projectId, isRoleLoading]);
 
   const handleRefresh = useCallback(() => {
     setRefreshKey((current) => current + 1);
