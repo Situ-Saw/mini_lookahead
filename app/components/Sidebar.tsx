@@ -81,6 +81,9 @@ const ADMIN_NAV_ITEM: NavItem = {
 const COLLAPSED_WIDTH = 56;
 const EXPANDED_WIDTH = 240;
 
+const SIDEBAR_BG_CLASS =
+  "bg-gradient-to-br from-[#e8f6f7] via-[#eaf4ff] to-[#f0f9ed] dark:bg-none dark:bg-[#0a1420]";
+
 const SKELETON_NAV_ITEMS = [...NAV_ITEMS, ADMIN_NAV_ITEM];
 
 function isLinkActive(pathname: string, href: string): boolean {
@@ -115,9 +118,9 @@ function NavSkeleton({
         showLabels ? "gap-3 px-3" : "justify-center px-0"
       }`}
     >
-      <Icon className="h-5 w-5 shrink-0 text-zinc-300 dark:text-zinc-600" />
+      <Icon className="h-5 w-5 shrink-0 text-zinc-300 dark:text-zinc-500" />
       {showLabels && (
-        <span className="h-4 flex-1 rounded bg-zinc-200 dark:bg-zinc-700/80" />
+        <span className="h-4 flex-1 rounded bg-zinc-200 dark:bg-white/10" />
       )}
     </div>
   );
@@ -185,7 +188,7 @@ export default function Sidebar() {
       <button
         type="button"
         onClick={() => setIsMobileOpen(true)}
-        className="fixed left-4 top-4 z-50 inline-flex h-10 w-10 items-center justify-center rounded-lg border border-zinc-200 bg-white p-2 text-zinc-900 shadow-sm transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white dark:hover:bg-zinc-800 md:hidden"
+        className="fixed left-4 top-4 z-50 inline-flex h-10 w-10 items-center justify-center rounded-lg border border-zinc-200 bg-white/90 p-2 text-zinc-900 shadow-sm transition-colors hover:bg-white dark:border-white/10 dark:bg-white/10 dark:text-white dark:hover:bg-white/20 md:hidden"
         aria-label="Open navigation menu"
       >
         <Menu className="h-5 w-5" />
@@ -205,12 +208,22 @@ export default function Sidebar() {
         onMouseEnter={() => setIsExpanded(true)}
         onMouseLeave={() => setIsExpanded(false)}
         style={{ width: sidebarWidth }}
-        className={`fixed inset-y-0 left-0 z-50 flex flex-col border-r border-zinc-200 bg-white text-zinc-900 transition-[width] duration-200 ease-in-out dark:border-zinc-700 dark:bg-zinc-900 dark:text-white ${
+        className={`fixed inset-y-0 left-0 z-50 flex flex-col overflow-hidden border-r border-zinc-200 text-zinc-900 transition-[width] duration-200 ease-in-out dark:border-white/10 ${SIDEBAR_BG_CLASS} ${
           isMobileOpen ? "translate-x-0" : "-translate-x-full"
         } md:translate-x-0`}
       >
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 hidden dark:block"
+          style={{
+            background:
+              "radial-gradient(circle at 30% 20%, rgba(53,159,171,0.3) 0%, transparent 50%), radial-gradient(circle at 80% 80%, rgba(84,181,251,0.25) 0%, transparent 50%)",
+          }}
+        />
+
+        <div className="relative z-10 flex min-h-0 flex-1 flex-col">
         {/* Header */}
-        <div className="flex h-14 shrink-0 items-center gap-2 border-b border-zinc-200 px-3 dark:border-zinc-700">
+        <div className="flex h-14 shrink-0 items-center gap-2 border-b border-zinc-200 px-3 dark:border-white/10">
           {showLabels ? (
             <Link
               href="/dashboard"
@@ -221,7 +234,7 @@ export default function Sidebar() {
             </Link>
           ) : (
             <div className="flex w-full justify-center" aria-hidden="true">
-              <Menu className="h-5 w-5 text-zinc-500 dark:text-zinc-300" />
+              <Menu className="h-5 w-5 text-zinc-500 dark:text-zinc-400" />
             </div>
           )}
 
@@ -229,7 +242,7 @@ export default function Sidebar() {
             <button
               type="button"
               onClick={() => setIsMobileOpen(false)}
-              className="inline-flex shrink-0 items-center justify-center rounded-md p-1 text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-white md:hidden"
+              className="inline-flex shrink-0 items-center justify-center rounded-md p-1 text-zinc-500 transition-colors hover:bg-white/50 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-white/5 dark:hover:text-white md:hidden"
               aria-label="Close navigation menu"
             >
               <X className="h-5 w-5" />
@@ -261,8 +274,8 @@ export default function Sidebar() {
                       showLabels ? "gap-3 px-3" : "justify-center px-0"
                     } ${
                       active
-                        ? "bg-zinc-100 text-zinc-900 dark:bg-zinc-700 dark:text-white"
-                        : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:hover:text-white"
+                        ? "bg-white text-zinc-900 shadow-sm dark:bg-white/10 dark:text-white"
+                        : "text-zinc-600 hover:bg-white/50 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-white/5 dark:hover:text-white"
                     }`}
                   >
                     <Icon className="h-5 w-5 shrink-0" />
@@ -278,7 +291,7 @@ export default function Sidebar() {
                     </span>
 
                     {!showLabels && (
-                      <span className="pointer-events-none absolute left-full z-50 ml-3 hidden whitespace-nowrap rounded-md bg-zinc-100 px-2.5 py-1.5 text-xs font-medium text-zinc-900 shadow-lg group-hover:block dark:bg-zinc-800 dark:text-white">
+                      <span className="pointer-events-none absolute left-full z-50 ml-3 hidden whitespace-nowrap rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-xs font-medium text-zinc-900 shadow-lg group-hover:block dark:border-white/10 dark:bg-[#0a1420] dark:text-white">
                         {item.label}
                       </span>
                     )}
@@ -286,6 +299,7 @@ export default function Sidebar() {
                 );
               })}
         </nav>
+        </div>
       </aside>
     </>
   );
