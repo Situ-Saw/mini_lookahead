@@ -13,11 +13,11 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* Dark theme variables driven by the .dark class (class-based toggle),
+   not prefers-color-scheme, so the toggle and the OS preference don't fight. */
+.dark {
+  --background: #0a0a0a;
+  --foreground: #ededed;
 }
 
 body {

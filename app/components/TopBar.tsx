@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { LogOut } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useActiveProject } from "@/lib/hooks/useActiveProject";
+import { useCurrentUser } from "@/lib/contexts/UserContext";
 
 const SIDEBAR_WIDTH_PX = 56;
 
@@ -48,31 +49,11 @@ export default function TopBar() {
   const pathname = usePathname();
   const router = useRouter();
   const { activeProject } = useActiveProject();
-  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const { user } = useCurrentUser();
   const [isSigningOut, setIsSigningOut] = useState(false);
 
   const pageTitle = useMemo(() => getPageTitle(pathname), [pathname]);
-
-  useEffect(() => {
-    let isMounted = true;
-
-    async function loadUser() {
-      const supabase = createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!isMounted) return;
-
-      setUserEmail(user?.email ?? null);
-    }
-
-    void loadUser();
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+  const userEmail = user?.email ?? null;
 
   const handleSignOut = async () => {
     setIsSigningOut(true);
