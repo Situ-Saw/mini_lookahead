@@ -77,14 +77,60 @@ const ROLE_OPTIONS: Array<{ value: AppRole; label: string }> = [
 
 const ROLE_BADGE_STYLES: Record<string, string> = {
   admin:
-    "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
+    "bg-zinc-100 text-zinc-700 dark:border dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100",
   planner:
-    "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300",
+    "bg-blue-100 text-blue-700 dark:border dark:border-blue-600 dark:bg-blue-600 dark:text-white",
   site_engineer:
-    "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300",
+    "bg-amber-100 text-amber-800 dark:border dark:border-amber-600 dark:bg-amber-600 dark:text-white",
   viewer:
-    "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400",
+    "bg-gray-100 text-gray-600 dark:border dark:border-zinc-600 dark:bg-zinc-600 dark:text-white",
 };
+
+const STATUS_BADGE_STYLES = {
+  active:
+    "bg-green-100 text-green-700 dark:border dark:border-emerald-600 dark:bg-emerald-600 dark:text-white",
+  inactive:
+    "bg-zinc-100 text-zinc-600 dark:border dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-300",
+};
+
+const ADMIN_PAGE_BG_CLASS =
+  "relative min-h-full w-full bg-gradient-to-br from-[#e8f6f7] via-[#eaf4ff] to-[#f0f9ed] dark:bg-none dark:bg-[#0a1420]";
+
+const ADMIN_CARD_BASE =
+  "rounded-xl border border-zinc-200 bg-white shadow-lg dark:border-zinc-200/30 dark:bg-white/95 dark:shadow-xl dark:shadow-black/30";
+
+const ADMIN_FLOATING_CARD_CLASS = `${ADMIN_CARD_BASE} border-l-4 border-l-[#359FAB] shadow-black/5`;
+
+const ADMIN_TABLE_CARD_CLASS =
+  "overflow-x-auto rounded-xl border border-zinc-200 border-l-4 border-l-[#54B5FB] bg-white shadow-lg shadow-[#54B5FB]/15 dark:border-zinc-200/30 dark:bg-white/95 dark:shadow-xl dark:shadow-black/30";
+
+const ADMIN_FORM_FIELD_CLASS =
+  "w-full rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:opacity-50 dark:border-zinc-200 dark:bg-white dark:text-zinc-900";
+
+const ADMIN_PRIMARY_BUTTON_CLASS =
+  "inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-[#54B5FB] dark:text-white dark:hover:bg-[#3a9ce8]";
+
+function AdminPageShell({
+  children,
+  contentClassName = "relative mx-auto w-full max-w-7xl flex-1 p-6 sm:p-10",
+}: {
+  children: React.ReactNode;
+  contentClassName?: string;
+}) {
+  return (
+    <main className={ADMIN_PAGE_BG_CLASS}>
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 hidden dark:block"
+        style={{
+          background:
+            "radial-gradient(circle at 30% 20%, rgba(53,159,171,0.3) 0%, transparent 50%), radial-gradient(circle at 80% 80%, rgba(84,181,251,0.25) 0%, transparent 50%)",
+        }}
+      />
+      <div className={contentClassName}>{children}</div>
+    </main>
+  );
+}
 
 function formatRole(role: string): string {
   return role
@@ -220,7 +266,7 @@ function CopyButton({ value, label }: { value: string; label: string }) {
     <button
       type="button"
       onClick={() => void handleCopy()}
-      className="inline-flex items-center gap-1 rounded-md border border-zinc-200 px-2 py-1 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+      className="inline-flex items-center gap-1 rounded-md border border-zinc-200 px-2 py-1 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-200 dark:bg-white dark:text-zinc-700 dark:hover:bg-zinc-50"
       aria-label={`Copy ${label}`}
     >
       {copied ? (
@@ -651,45 +697,49 @@ export default function AdminPage() {
 
   if (isCheckingAccess) {
     return (
-      <main className="mx-auto flex min-h-[50vh] w-full max-w-7xl items-center justify-center p-6">
+      <AdminPageShell contentClassName="relative mx-auto flex min-h-[50vh] w-full max-w-7xl items-center justify-center p-6 sm:p-10">
         <Loader2 className="h-8 w-8 animate-spin text-zinc-400" aria-label="Loading" />
-      </main>
+      </AdminPageShell>
     );
   }
 
   if (!isAdmin) {
     return (
-      <main className="mx-auto w-full max-w-3xl flex-1 p-6 sm:p-10">
-        <div className="rounded-xl border border-zinc-200 bg-white p-8 text-center shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+      <AdminPageShell contentClassName="relative mx-auto w-full max-w-3xl flex-1 p-6 sm:p-10">
+        <div className={`${ADMIN_FLOATING_CARD_CLASS} p-8 text-center`}>
           <ShieldAlert className="mx-auto h-10 w-10 text-red-500" aria-hidden="true" />
-          <h1 className="mt-4 text-2xl font-bold tracking-tight">Access Denied</h1>
-          <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+          <h1 className="mt-4 text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-900">
+            Access Denied
+          </h1>
+          <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-500">
             You do not have permission to access the Admin Panel.
           </p>
         </div>
-      </main>
+      </AdminPageShell>
     );
   }
 
   return (
-    <main className="mx-auto w-full max-w-7xl flex-1 p-6 sm:p-10">
+    <AdminPageShell>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Admin Panel</h1>
-        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+        <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-white sm:text-3xl">
+          Admin Panel
+        </h1>
+        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
           Manage users, projects, and credentials
         </p>
       </div>
 
-      <div className="mb-6 flex flex-wrap gap-2 border-b border-zinc-200 dark:border-zinc-800">
+      <div className="mb-6 flex flex-wrap gap-2">
         {TABS.map((tab) => (
           <button
             key={tab.id}
             type="button"
             onClick={() => setActiveTab(tab.id)}
-            className={`-mb-px rounded-t-lg px-4 py-2.5 text-sm font-medium transition-colors ${
+            className={`rounded-md px-4 py-2.5 text-sm font-medium transition-colors ${
               activeTab === tab.id
-                ? "border-b-2 border-zinc-900 text-zinc-900 dark:border-zinc-100 dark:text-zinc-100"
-                : "text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200"
+                ? "bg-zinc-900 text-white dark:bg-zinc-900 dark:text-white"
+                : "bg-white text-zinc-700 ring-1 ring-zinc-200 hover:bg-zinc-50 dark:bg-white/90 dark:text-zinc-700 dark:ring-zinc-200 dark:hover:bg-white"
             }`}
           >
             {tab.label}
@@ -710,11 +760,11 @@ export default function AdminPage() {
       )}
 
       {activeTab === "create-user" && (
-        <section className="max-w-xl">
-          <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+        <section className={`max-w-xl ${ADMIN_FLOATING_CARD_CLASS} p-6`}>
+          <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-900">
             Create User
           </h2>
-          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-500">
             Generate a new user ID and password for a project member.
           </p>
 
@@ -722,7 +772,7 @@ export default function AdminPage() {
             <div>
               <label
                 htmlFor="full-name"
-                className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-500"
               >
                 Full Name
               </label>
@@ -733,14 +783,14 @@ export default function AdminPage() {
                 value={createName}
                 onChange={(event) => setCreateName(event.target.value)}
                 disabled={isCreatingUser}
-                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+                className={ADMIN_FORM_FIELD_CLASS}
               />
             </div>
 
             <div>
               <label
                 htmlFor="role"
-                className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-500"
               >
                 Role
               </label>
@@ -749,7 +799,7 @@ export default function AdminPage() {
                 value={createRole}
                 onChange={(event) => setCreateRole(event.target.value as AppRole)}
                 disabled={isCreatingUser}
-                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+                className={ADMIN_FORM_FIELD_CLASS}
               >
                 {ROLE_OPTIONS.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -762,7 +812,7 @@ export default function AdminPage() {
             <div>
               <label
                 htmlFor="project"
-                className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-500"
               >
                 Project
               </label>
@@ -772,7 +822,7 @@ export default function AdminPage() {
                 value={createProjectId}
                 onChange={(event) => setCreateProjectId(event.target.value)}
                 disabled={isCreatingUser || projects.length === 0}
-                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+                className={ADMIN_FORM_FIELD_CLASS}
               >
                 {projects.length === 0 ? (
                   <option value="">No projects available</option>
@@ -790,7 +840,7 @@ export default function AdminPage() {
               <div>
                 <label
                   htmlFor="assign-engineer"
-                  className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                  className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-500"
                 >
                   Assign to Site Engineer
                 </label>
@@ -806,7 +856,7 @@ export default function AdminPage() {
                     isLoadingEngineers ||
                     engineerOptions.length === 0
                   }
-                  className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+                  className={ADMIN_FORM_FIELD_CLASS}
                 >
                   <option value="" disabled>
                     {isLoadingEngineers
@@ -835,7 +885,7 @@ export default function AdminPage() {
                 projects.length === 0 ||
                 (createRole === "viewer" && !assignToEngineerId)
               }
-              className="inline-flex items-center gap-2 rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+              className={ADMIN_PRIMARY_BUTTON_CLASS}
             >
               {isCreatingUser && (
                 <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
@@ -889,11 +939,11 @@ export default function AdminPage() {
       )}
 
       {activeTab === "create-project" && (
-        <section className="max-w-xl">
-          <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+        <section className={`max-w-xl ${ADMIN_FLOATING_CARD_CLASS} p-6`}>
+          <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-900">
             Create Project
           </h2>
-          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-500">
             Add a new project and initialize user ID sequences.
           </p>
 
@@ -901,7 +951,7 @@ export default function AdminPage() {
             <div>
               <label
                 htmlFor="project-name"
-                className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-500"
               >
                 Project Name
               </label>
@@ -912,14 +962,14 @@ export default function AdminPage() {
                 value={projectName}
                 onChange={(event) => setProjectName(event.target.value)}
                 disabled={isCreatingProject}
-                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+                className={ADMIN_FORM_FIELD_CLASS}
               />
             </div>
 
             <div>
               <label
                 htmlFor="project-code"
-                className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-500"
               >
                 Project Code
               </label>
@@ -936,9 +986,11 @@ export default function AdminPage() {
                 }
                 disabled={isCreatingProject}
                 placeholder="e.g. BSL"
-                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2.5 font-mono text-sm uppercase text-zinc-900 shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+                className={`${ADMIN_FORM_FIELD_CLASS} font-mono uppercase`}
               />
-              <p className="mt-1 text-xs text-zinc-500">Max 6 characters, no spaces</p>
+              <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-500">
+                Max 6 characters, no spaces
+              </p>
             </div>
 
             {createProjectError && (
@@ -956,7 +1008,7 @@ export default function AdminPage() {
             <button
               type="submit"
               disabled={isCreatingProject}
-              className="inline-flex items-center gap-2 rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+              className={ADMIN_PRIMARY_BUTTON_CLASS}
             >
               {isCreatingProject && (
                 <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
@@ -970,7 +1022,7 @@ export default function AdminPage() {
       {activeTab === "all-users" && (
         <section>
           <div className="mb-4 flex items-center justify-between gap-4">
-            <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+            <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">
               All Users
             </h2>
             {isLoadingData && (
@@ -978,36 +1030,36 @@ export default function AdminPage() {
             )}
           </div>
 
-          <div className="overflow-x-auto rounded-xl border border-zinc-200 dark:border-zinc-800">
-            <table className="min-w-full divide-y divide-zinc-200 text-sm dark:divide-zinc-800">
-              <thead className="bg-zinc-50 dark:bg-zinc-900/60">
+          <div className={ADMIN_TABLE_CARD_CLASS}>
+            <table className="min-w-full divide-y divide-zinc-200 text-sm">
+              <thead className="bg-zinc-50">
                 <tr>
-                  <th className="px-4 py-3 text-left font-medium text-zinc-600 dark:text-zinc-400">
+                  <th className="px-4 py-3 text-left font-medium text-zinc-600 dark:text-zinc-500">
                     User ID
                   </th>
-                  <th className="px-4 py-3 text-left font-medium text-zinc-600 dark:text-zinc-400">
+                  <th className="px-4 py-3 text-left font-medium text-zinc-600 dark:text-zinc-500">
                     Full Name
                   </th>
-                  <th className="px-4 py-3 text-left font-medium text-zinc-600 dark:text-zinc-400">
+                  <th className="px-4 py-3 text-left font-medium text-zinc-600 dark:text-zinc-500">
                     Role
                   </th>
-                  <th className="px-4 py-3 text-left font-medium text-zinc-600 dark:text-zinc-400">
+                  <th className="px-4 py-3 text-left font-medium text-zinc-600 dark:text-zinc-500">
                     Project
                   </th>
-                  <th className="px-4 py-3 text-left font-medium text-zinc-600 dark:text-zinc-400">
+                  <th className="px-4 py-3 text-left font-medium text-zinc-600 dark:text-zinc-500">
                     Status
                   </th>
-                  <th className="px-4 py-3 text-right font-medium text-zinc-600 dark:text-zinc-400">
+                  <th className="px-4 py-3 text-right font-medium text-zinc-600 dark:text-zinc-500">
                     Actions
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-200 bg-white dark:divide-zinc-800 dark:bg-zinc-950">
+              <tbody className="divide-y divide-zinc-200 bg-white">
                 {sortedUsers.length === 0 ? (
                   <tr>
                     <td
                       colSpan={6}
-                      className="px-4 py-8 text-center text-zinc-500 dark:text-zinc-400"
+                      className="px-4 py-8 text-center text-zinc-500 dark:text-zinc-500"
                     >
                       No users found.
                     </td>
@@ -1017,13 +1069,13 @@ export default function AdminPage() {
                     const isActive = user.is_active !== false;
 
                     return (
-                      <tr key={user.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-900/40">
-                        <td className="px-4 py-3 font-mono text-xs text-zinc-700 dark:text-zinc-300">
+                      <tr key={user.id} className="hover:bg-zinc-50">
+                        <td className="px-4 py-3 font-mono text-xs text-zinc-900 dark:text-zinc-900">
                           {user.email.endsWith("@lookahead.app")
                             ? displayUserId(user.email)
                             : user.email.split("@")[0]}
                         </td>
-                        <td className="px-4 py-3 font-medium text-zinc-900 dark:text-zinc-100">
+                        <td className="px-4 py-3 font-medium text-zinc-900 dark:text-zinc-900">
                           {user.name}
                         </td>
                         <td className="px-4 py-3">
@@ -1036,15 +1088,15 @@ export default function AdminPage() {
                             {formatRole(user.global_role)}
                           </span>
                         </td>
-                        <td className="px-4 py-3 font-mono text-xs text-zinc-600 dark:text-zinc-400">
+                        <td className="px-4 py-3 font-mono text-xs text-zinc-500 dark:text-zinc-500">
                           {user.projectCode}
                         </td>
                         <td className="px-4 py-3">
                           <span
                             className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${
                               isActive
-                                ? "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300"
-                                : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
+                                ? STATUS_BADGE_STYLES.active
+                                : STATUS_BADGE_STYLES.inactive
                             }`}
                           >
                             {isActive ? "Active" : "Inactive"}
@@ -1054,7 +1106,7 @@ export default function AdminPage() {
                           <div className="flex flex-wrap items-center justify-end gap-2">
                             {confirmDeactivateId === user.id ? (
                               <div className="flex flex-wrap items-center gap-2 text-xs">
-                                <span className="text-zinc-600 dark:text-zinc-400">
+                                <span className="text-zinc-600 dark:text-zinc-500">
                                   Deactivate this user?
                                 </span>
                                 <button
@@ -1068,7 +1120,7 @@ export default function AdminPage() {
                                 <button
                                   type="button"
                                   onClick={() => setConfirmDeactivateId(null)}
-                                  className="rounded-md border border-zinc-300 px-2.5 py-1 font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                                  className="rounded-md border border-zinc-300 px-2.5 py-1 font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-200 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-50"
                                 >
                                   Cancel
                                 </button>
@@ -1083,7 +1135,7 @@ export default function AdminPage() {
                                       setActionError(null);
                                     }}
                                     disabled={deactivatingUserId === user.id}
-                                    className="rounded-md bg-red-50 px-2.5 py-1 text-xs font-medium text-red-600 transition-colors hover:bg-red-100 disabled:opacity-50 dark:bg-red-950/30 dark:text-red-400 dark:hover:bg-red-950/50"
+                                    className="rounded-md bg-red-600 px-2.5 py-1 text-xs font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-50"
                                   >
                                     Deactivate
                                   </button>
@@ -1094,7 +1146,7 @@ export default function AdminPage() {
                                   disabled={
                                     !isActive || resettingUserId === user.id
                                   }
-                                  className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 transition-colors hover:bg-amber-100 disabled:opacity-50 dark:bg-amber-950/30 dark:text-amber-400 dark:hover:bg-amber-950/50"
+                                  className="inline-flex items-center gap-1 rounded-md bg-amber-600 px-2.5 py-1 text-xs font-medium text-white transition-colors hover:bg-amber-700 disabled:opacity-50"
                                 >
                                   {resettingUserId === user.id && (
                                     <Loader2
@@ -1121,7 +1173,7 @@ export default function AdminPage() {
       {activeTab === "all-projects" && (
         <section>
           <div className="mb-4 flex items-center justify-between gap-4">
-            <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+            <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">
               All Projects
             </h2>
             {isLoadingData && (
@@ -1129,33 +1181,33 @@ export default function AdminPage() {
             )}
           </div>
 
-          <div className="overflow-x-auto rounded-xl border border-zinc-200 dark:border-zinc-800">
-            <table className="min-w-full divide-y divide-zinc-200 text-sm dark:divide-zinc-800">
-              <thead className="bg-zinc-50 dark:bg-zinc-900/60">
+          <div className={ADMIN_TABLE_CARD_CLASS}>
+            <table className="min-w-full divide-y divide-zinc-200 text-sm">
+              <thead className="bg-zinc-50">
                 <tr>
-                  <th className="px-4 py-3 text-left font-medium text-zinc-600 dark:text-zinc-400">
+                  <th className="px-4 py-3 text-left font-medium text-zinc-600 dark:text-zinc-500">
                     Project Code
                   </th>
-                  <th className="px-4 py-3 text-left font-medium text-zinc-600 dark:text-zinc-400">
+                  <th className="px-4 py-3 text-left font-medium text-zinc-600 dark:text-zinc-500">
                     Project Name
                   </th>
-                  <th className="px-4 py-3 text-left font-medium text-zinc-600 dark:text-zinc-400">
+                  <th className="px-4 py-3 text-left font-medium text-zinc-600 dark:text-zinc-500">
                     Members
                   </th>
-                  <th className="px-4 py-3 text-left font-medium text-zinc-600 dark:text-zinc-400">
+                  <th className="px-4 py-3 text-left font-medium text-zinc-600 dark:text-zinc-500">
                     Created
                   </th>
-                  <th className="px-4 py-3 text-right font-medium text-zinc-600 dark:text-zinc-400">
+                  <th className="px-4 py-3 text-right font-medium text-zinc-600 dark:text-zinc-500">
                     Actions
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-200 bg-white dark:divide-zinc-800 dark:bg-zinc-950">
+              <tbody className="divide-y divide-zinc-200 bg-white">
                 {allProjects.length === 0 ? (
                   <tr>
                     <td
                       colSpan={5}
-                      className="px-4 py-8 text-center text-zinc-500 dark:text-zinc-400"
+                      className="px-4 py-8 text-center text-zinc-500 dark:text-zinc-500"
                     >
                       No projects found.
                     </td>
@@ -1166,17 +1218,17 @@ export default function AdminPage() {
                     const members = projectMembers[project.id] ?? [];
 
                     return (
-                      <tr key={project.id} className="align-top">
-                        <td className="px-4 py-3 font-mono text-xs font-medium text-zinc-900 dark:text-zinc-100">
+                      <tr key={project.id} className="align-top hover:bg-zinc-50">
+                        <td className="px-4 py-3 font-mono text-xs font-medium text-zinc-900 dark:text-zinc-900">
                           {project.code}
                         </td>
-                        <td className="px-4 py-3 text-zinc-900 dark:text-zinc-100">
+                        <td className="px-4 py-3 text-zinc-900 dark:text-zinc-900">
                           {project.name}
                         </td>
-                        <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">
+                        <td className="px-4 py-3 text-zinc-500 dark:text-zinc-500">
                           {project.memberCount}
                         </td>
-                        <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">
+                        <td className="px-4 py-3 text-zinc-500 dark:text-zinc-500">
                           {formatDate(project.created_at)}
                         </td>
                         <td className="px-4 py-3 text-right">
@@ -1189,7 +1241,7 @@ export default function AdminPage() {
                               }
                               void loadProjectMembers(project.id);
                             }}
-                            className="inline-flex items-center gap-1 rounded-md border border-zinc-200 px-2.5 py-1 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                            className="inline-flex items-center gap-1 rounded-md border border-zinc-200 px-2.5 py-1 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-200 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-50"
                           >
                             {isExpanded ? (
                               <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
@@ -1200,7 +1252,7 @@ export default function AdminPage() {
                           </button>
 
                           {isExpanded && (
-                            <div className="mt-3 rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-left dark:border-zinc-700 dark:bg-zinc-900/60">
+                            <div className="mt-3 rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-left dark:border-zinc-200 dark:bg-zinc-50">
                               {loadingMembersProjectId === project.id ? (
                                 <div className="flex justify-center py-4">
                                   <Loader2
@@ -1209,7 +1261,9 @@ export default function AdminPage() {
                                   />
                                 </div>
                               ) : members.length === 0 ? (
-                                <p className="text-xs text-zinc-500">No members yet.</p>
+                                <p className="text-xs text-zinc-500 dark:text-zinc-500">
+                                  No members yet.
+                                </p>
                               ) : (
                                 <ul className="space-y-2">
                                   {members.map((member) => (
@@ -1218,10 +1272,10 @@ export default function AdminPage() {
                                       className="flex flex-wrap items-center justify-between gap-2 text-xs"
                                     >
                                       <div>
-                                        <p className="font-medium text-zinc-900 dark:text-zinc-100">
+                                        <p className="font-medium text-zinc-900 dark:text-zinc-900">
                                           {member.profiles?.name ?? "Unknown"}
                                         </p>
-                                        <p className="font-mono text-zinc-500">
+                                        <p className="font-mono text-zinc-500 dark:text-zinc-500">
                                           {member.profiles
                                             ? displayUserId(member.profiles.email)
                                             : "—"}
@@ -1254,15 +1308,15 @@ export default function AdminPage() {
 
       {resetPasswordModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-xl border border-zinc-200 bg-white p-6 shadow-xl dark:border-zinc-800 dark:bg-zinc-950">
-            <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+          <div className="w-full max-w-md rounded-xl border border-zinc-200 bg-white p-6 shadow-xl dark:border-zinc-200/30 dark:bg-white/95 dark:shadow-xl dark:shadow-black/30">
+            <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-900">
               Password reset successfully
             </h3>
-            <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+            <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-500">
               New password for {resetPasswordModal.userName}
             </p>
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-zinc-50 px-3 py-3 dark:bg-zinc-900">
-              <span className="font-mono text-sm text-zinc-900 dark:text-zinc-100">
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-3 dark:border-zinc-200 dark:bg-zinc-50">
+              <span className="font-mono text-sm text-zinc-900 dark:text-zinc-900">
                 {resetPasswordModal.newPassword}
               </span>
               <CopyButton
@@ -1273,13 +1327,13 @@ export default function AdminPage() {
             <button
               type="button"
               onClick={() => setResetPasswordModal(null)}
-              className="mt-5 w-full rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+              className={`mt-5 w-full ${ADMIN_PRIMARY_BUTTON_CLASS}`}
             >
               Close
             </button>
           </div>
         </div>
       )}
-    </main>
+    </AdminPageShell>
   );
 }

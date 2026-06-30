@@ -16,6 +16,45 @@ import { hasRoleAccess } from "@/lib/role-access";
 
 const ACCEPTED_EXTENSIONS = [".xlsx", ".xls"];
 
+const IMPORT_PAGE_BG_CLASS =
+  "relative min-h-full w-full bg-gradient-to-br from-[#e8f6f7] via-[#eaf4ff] to-[#f0f9ed] dark:bg-none dark:bg-[#0a1420]";
+
+const IMPORT_CARD_BASE =
+  "rounded-xl border border-zinc-200 bg-white shadow-lg dark:border-zinc-200/30 dark:bg-white/95 dark:shadow-xl dark:shadow-black/30";
+
+const IMPORT_FLOATING_CARD_CLASS = `${IMPORT_CARD_BASE} border-l-4 border-l-[#359FAB] shadow-black/5`;
+
+const IMPORT_TABLE_CARD_CLASS =
+  "overflow-x-auto rounded-xl border border-zinc-200 border-l-4 border-l-[#54B5FB] bg-white shadow-lg shadow-[#54B5FB]/15 dark:border-zinc-200/30 dark:bg-white/95 dark:shadow-xl dark:shadow-black/30";
+
+const IMPORT_PRIMARY_BUTTON_CLASS =
+  "inline-flex items-center justify-center rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-[#54B5FB] dark:text-white dark:hover:bg-[#3a9ce8]";
+
+const IMPORT_SECONDARY_BUTTON_CLASS =
+  "inline-flex items-center justify-center rounded-lg border border-zinc-300 bg-white px-5 py-2.5 text-sm font-medium text-zinc-900 transition-colors hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-200 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-50";
+
+function ImportPageShell({
+  children,
+  contentClassName = "relative mx-auto w-full max-w-5xl flex-1 p-6 sm:p-10",
+}: {
+  children: React.ReactNode;
+  contentClassName?: string;
+}) {
+  return (
+    <main className={IMPORT_PAGE_BG_CLASS}>
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 hidden dark:block"
+        style={{
+          background:
+            "radial-gradient(circle at 30% 20%, rgba(53,159,171,0.3) 0%, transparent 50%), radial-gradient(circle at 80% 80%, rgba(84,181,251,0.25) 0%, transparent 50%)",
+        }}
+      />
+      <div className={contentClassName}>{children}</div>
+    </main>
+  );
+}
+
 const PREVIEW_COLUMNS: Array<keyof PrimaveraExcelRow> = [
   "task_code",
   "task_name",
@@ -97,14 +136,14 @@ function ModeCard({
     <button
       type="button"
       onClick={onSelect}
-      className={`relative w-full rounded-xl border-2 p-5 text-left transition-colors ${
+      className={`relative w-full rounded-xl border-2 p-5 text-left shadow-lg transition-colors dark:shadow-xl dark:shadow-black/30 ${
         isSelected
-          ? "border-blue-500 bg-blue-50 dark:border-blue-400 dark:bg-blue-950/30"
-          : "border-zinc-200 bg-white hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:hover:border-zinc-700 dark:hover:bg-zinc-900/60"
+          ? "border-blue-500 bg-white dark:border-blue-500 dark:bg-white/95"
+          : "border-zinc-200 bg-white hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-200/30 dark:bg-white/95 dark:hover:border-zinc-300 dark:hover:bg-white"
       }`}
     >
       {isSelected && (
-        <span className="absolute right-4 top-4 inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-600 text-white dark:bg-blue-500">
+        <span className="absolute right-4 top-4 inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-600 text-white">
           <Check className="h-4 w-4" aria-hidden="true" />
         </span>
       )}
@@ -112,17 +151,17 @@ function ModeCard({
       <div
         className={`mb-3 inline-flex rounded-lg p-2 ${
           isSelected
-            ? "bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300"
-            : "bg-zinc-100 text-zinc-600 dark:bg-zinc-900 dark:text-zinc-400"
+            ? "bg-blue-100 text-blue-700 dark:bg-blue-100 dark:text-blue-700"
+            : "bg-zinc-100 text-zinc-600 dark:bg-zinc-100 dark:text-zinc-600"
         }`}
       >
         {icon}
       </div>
 
-      <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
+      <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-900">
         {title}
       </h2>
-      <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+      <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-500">
         {description}
       </p>
     </button>
@@ -333,58 +372,58 @@ export default function ImportPage() {
 
   if (isProjectLoading || isRoleLoading) {
     return (
-      <main className="mx-auto flex min-h-[50vh] w-full max-w-5xl items-center justify-center p-6 sm:p-10">
+      <ImportPageShell contentClassName="relative mx-auto flex min-h-[50vh] w-full max-w-5xl items-center justify-center p-6 sm:p-10">
         <Loader2
           className="h-8 w-8 animate-spin text-zinc-400"
           aria-label="Loading project"
         />
-      </main>
+      </ImportPageShell>
     );
   }
 
   if (!hasRoleAccess(role, "import")) {
     return (
-      <main className="mx-auto flex min-h-[50vh] w-full max-w-5xl items-center justify-center p-6 sm:p-10">
+      <ImportPageShell contentClassName="relative mx-auto flex min-h-[50vh] w-full max-w-5xl items-center justify-center p-6 sm:p-10">
         <Loader2
           className="h-8 w-8 animate-spin text-zinc-400"
           aria-label="Checking access"
         />
-      </main>
+      </ImportPageShell>
     );
   }
 
   if (!activeProject) {
     return (
-      <main className="mx-auto w-full max-w-5xl flex-1 p-6 sm:p-10">
-        <div className="rounded-xl border border-zinc-200 bg-white p-8 text-center dark:border-zinc-800 dark:bg-zinc-950">
-          <p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
+      <ImportPageShell>
+        <div className={`${IMPORT_FLOATING_CARD_CLASS} p-8 text-center`}>
+          <p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-500">
             No project selected.
             <br />
             Please select a project to continue.
           </p>
           <Link
             href="/select-project"
-            className="mt-4 inline-flex rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+            className={`mt-4 ${IMPORT_PRIMARY_BUTTON_CLASS}`}
           >
             Select Project
           </Link>
         </div>
-      </main>
+      </ImportPageShell>
     );
   }
 
   return (
-    <main className="mx-auto w-full max-w-5xl flex-1 p-6 sm:p-10">
+    <ImportPageShell>
       <div className="mb-8">
-        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
+        <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-white sm:text-3xl">
           Import Activities
         </h1>
-        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
           Upload a Primavera P6 Excel export. The descriptive header row is
           skipped automatically and activity data is read from row 3 onward.
         </p>
-        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-          <span className="inline-flex items-center rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
+          <span className="inline-flex items-center rounded-full bg-white px-2.5 py-0.5 text-xs font-medium text-zinc-700 ring-1 ring-zinc-200 dark:bg-white/90 dark:text-zinc-700 dark:ring-zinc-200">
             {activeProject.code} — {activeProject.name}
           </span>
         </p>
@@ -392,7 +431,7 @@ export default function ImportPage() {
 
       <div className="space-y-6">
         <div>
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-300">
             Import Mode
           </h2>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -420,12 +459,12 @@ export default function ImportPage() {
         </div>
 
         {selectedMode === "baseline" ? (
-          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-300 dark:bg-amber-50 dark:text-amber-900">
             ⚠️ Warning: Baseline can only be imported once. Make sure your file is
             correct before importing. This action cannot be undone.
           </div>
         ) : (
-          <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 dark:border-blue-900/50 dark:bg-blue-950/30 dark:text-blue-200">
+          <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 dark:border-blue-300 dark:bg-blue-50 dark:text-blue-900">
             <span className="inline-flex items-start gap-2">
               <BarChart3
                 className="mt-0.5 h-4 w-4 shrink-0"
@@ -440,7 +479,7 @@ export default function ImportPage() {
         )}
 
         {baselineExistsError && (
-          <div className="rounded-lg border border-red-300 bg-red-50 px-4 py-4 text-sm text-red-900 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
+          <div className="rounded-lg border border-red-300 bg-red-50 px-4 py-4 text-sm text-red-900 dark:border-red-300 dark:bg-red-50 dark:text-red-900">
             <p className="font-medium">
               Baseline has already been imported and is frozen.
             </p>
@@ -450,7 +489,7 @@ export default function ImportPage() {
             <button
               type="button"
               onClick={handleSwitchToProgressUpdate}
-              className="mt-4 inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-400"
+              className={`mt-4 ${IMPORT_PRIMARY_BUTTON_CLASS}`}
             >
               Switch to Progress Update
             </button>
@@ -462,10 +501,10 @@ export default function ImportPage() {
           onDragLeave={handleDragLeave}
           onDragOver={handleDragOver}
           onDrop={handleDrop}
-          className={`rounded-xl border-2 border-dashed px-6 py-10 text-center transition-colors ${
+          className={`rounded-xl border-2 border-dashed px-6 py-10 text-center shadow-lg transition-colors dark:shadow-xl dark:shadow-black/30 ${
             isDragging
-              ? "border-blue-500 bg-blue-50 dark:border-blue-400 dark:bg-blue-950/30"
-              : "border-zinc-300 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900/40"
+              ? "border-blue-500 bg-blue-50 dark:border-blue-500 dark:bg-blue-50"
+              : "border-zinc-300 bg-white dark:border-zinc-200/30 dark:bg-white/95"
           }`}
         >
           <input
@@ -477,10 +516,10 @@ export default function ImportPage() {
           />
 
           <div className="mx-auto flex max-w-md flex-col items-center gap-3">
-            <div className="rounded-full bg-white p-3 shadow-sm dark:bg-zinc-950">
+            <div className="rounded-full bg-zinc-50 p-3 shadow-sm dark:bg-zinc-50">
               <svg
                 aria-hidden="true"
-                className="h-8 w-8 text-zinc-500 dark:text-zinc-400"
+                className="h-8 w-8 text-zinc-500 dark:text-zinc-500"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -495,14 +534,14 @@ export default function ImportPage() {
             </div>
 
             <div>
-              <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+              <p className="text-sm font-medium text-zinc-900 dark:text-zinc-900">
                 Drag and drop your Excel file here
               </p>
-              <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+              <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-500">
                 or{" "}
                 <label
                   htmlFor={inputId}
-                  className="cursor-pointer font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                  className="cursor-pointer font-medium text-blue-600 hover:text-blue-700 dark:text-blue-600 dark:hover:text-blue-700"
                 >
                   browse files
                 </label>
@@ -516,22 +555,22 @@ export default function ImportPage() {
         </div>
 
         {selectedFile && (
-          <div className="rounded-lg border border-zinc-200 bg-white px-4 py-3 dark:border-zinc-800 dark:bg-zinc-950">
-            <p className="text-sm text-zinc-600 dark:text-zinc-400">Selected file</p>
-            <p className="mt-1 truncate text-sm font-medium text-zinc-900 dark:text-zinc-100">
+          <div className={`${IMPORT_CARD_BASE} px-4 py-3`}>
+            <p className="text-sm text-zinc-600 dark:text-zinc-500">Selected file</p>
+            <p className="mt-1 truncate text-sm font-medium text-zinc-900 dark:text-zinc-900">
               {selectedFile.name}
             </p>
           </div>
         )}
 
         {error && (
-          <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
+          <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-300 dark:bg-red-50 dark:text-red-900">
             {error}
           </p>
         )}
 
         {dbImportSucceeded && dbImportResult && (
-          <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-200">
+          <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-300 dark:bg-emerald-50 dark:text-emerald-900">
             {selectedMode === "baseline" ? (
               <>
                 ✅ Baseline imported successfully.{" "}
@@ -553,11 +592,11 @@ export default function ImportPage() {
         {dbImportSucceeded &&
           dbImportResult?.warnings &&
           dbImportResult.warnings.length > 0 && (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-900/50 dark:bg-amber-950/30">
+            <div className="rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-300 dark:bg-amber-50">
               <button
                 type="button"
                 onClick={() => setShowImportWarnings((current) => !current)}
-                className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-medium text-amber-900 dark:text-amber-200"
+                className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-medium text-amber-900 dark:text-amber-900"
               >
                 <span>
                   ⚠ {dbImportResult.warnings.length} validation warning
@@ -572,16 +611,16 @@ export default function ImportPage() {
               </button>
 
               {showImportWarnings && (
-                <ul className="space-y-2 border-t border-amber-200 px-4 py-3 dark:border-amber-900/50">
+                <ul className="space-y-2 border-t border-amber-200 px-4 py-3 dark:border-amber-300">
                   {dbImportResult.warnings.map((warning) => (
                     <li
                       key={`${warning.activity_id}-${warning.warning}`}
-                      className="text-sm text-amber-900 dark:text-amber-200"
+                      className="text-sm text-amber-900 dark:text-amber-900"
                     >
                       <span className="font-mono text-xs">
                         {warning.activity_id}
                       </span>
-                      <span className="mx-2 text-amber-700 dark:text-amber-300">
+                      <span className="mx-2 text-amber-700 dark:text-amber-700">
                         —
                       </span>
                       {warning.warning}
@@ -593,7 +632,7 @@ export default function ImportPage() {
           )}
 
         {dbImportPartial && dbImportResult && (
-          <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
+          <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-300 dark:bg-amber-50 dark:text-amber-900">
             Partially imported {dbImportResult.totalInserted} of{" "}
             {dbImportResult.totalValidRows} valid rows.{" "}
             {dbImportResult.failedCount} row
@@ -602,7 +641,7 @@ export default function ImportPage() {
         )}
 
         {dbImportFailed && dbImportResult && (
-          <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
+          <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-300 dark:bg-red-50 dark:text-red-900">
             Import failed. {dbImportResult.failedCount} of{" "}
             {dbImportResult.totalValidRows} valid rows could not be inserted.
           </p>
@@ -613,7 +652,7 @@ export default function ImportPage() {
             type="button"
             onClick={handleImport}
             disabled={!selectedFile || isImporting || isSavingToDb}
-            className="inline-flex items-center justify-center rounded-lg bg-zinc-900 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+            className={IMPORT_SECONDARY_BUTTON_CLASS}
           >
             {isImporting ? "Parsing..." : "Parse Excel"}
           </button>
@@ -622,7 +661,7 @@ export default function ImportPage() {
             type="button"
             onClick={handleImportToDatabase}
             disabled={!parsedRows?.length || isImporting || isSavingToDb}
-            className="inline-flex items-center justify-center rounded-lg border border-zinc-300 bg-white px-5 py-2.5 text-sm font-medium text-zinc-900 transition-colors hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:bg-zinc-900"
+            className={IMPORT_PRIMARY_BUTTON_CLASS}
           >
             {isSavingToDb ? "Saving to Database..." : "Import to Database"}
           </button>
@@ -630,40 +669,40 @@ export default function ImportPage() {
 
         {parsedRows && (
           <div className="space-y-4">
-            <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-200">
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-300 dark:bg-emerald-50 dark:text-emerald-900">
               Parsed {parsedRows.length} valid activity{" "}
               {parsedRows.length === 1 ? "row" : "rows"} from the first sheet.
             </div>
 
             {previewRows.length > 0 ? (
               <div>
-                <h2 className="mb-3 text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+                <h2 className="mb-3 text-lg font-semibold text-zinc-900 dark:text-white">
                   Preview (first 5 rows)
                 </h2>
-                <div className="overflow-x-auto rounded-lg border border-zinc-200 shadow-sm dark:border-zinc-800">
-                  <table className="min-w-full divide-y divide-zinc-200 text-left text-sm dark:divide-zinc-800">
-                    <thead className="bg-zinc-50 dark:bg-zinc-900/60">
+                <div className={IMPORT_TABLE_CARD_CLASS}>
+                  <table className="min-w-full divide-y divide-zinc-200 text-left text-sm">
+                    <thead className="bg-zinc-50">
                       <tr>
                         {PREVIEW_COLUMNS.map((column) => (
                           <th
                             key={column}
-                            className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-100"
+                            className="whitespace-nowrap px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-900"
                           >
                             {PREVIEW_COLUMN_LABELS[column] ?? column}
                           </th>
                         ))}
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-zinc-200 bg-white dark:divide-zinc-800 dark:bg-zinc-950">
+                    <tbody className="divide-y divide-zinc-200 bg-white">
                       {previewRows.map((row, rowIndex) => (
                         <tr
                           key={`${normalizePreviewKey(row)}-${rowIndex}`}
-                          className="hover:bg-zinc-50 dark:hover:bg-zinc-900/40"
+                          className="hover:bg-zinc-50"
                         >
                           {PREVIEW_COLUMNS.map((column) => (
                             <td
                               key={`${rowIndex}-${column}`}
-                              className="max-w-xs truncate px-4 py-3 text-zinc-700 dark:text-zinc-300"
+                              className="max-w-xs truncate px-4 py-3 text-zinc-900 dark:text-zinc-900"
                               title={formatCellValue(row[column])}
                             >
                               {formatCellValue(row[column])}
@@ -676,14 +715,14 @@ export default function ImportPage() {
                 </div>
               </div>
             ) : (
-              <p className="rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-400">
+              <p className={`${IMPORT_CARD_BASE} px-4 py-3 text-sm text-zinc-600 dark:text-zinc-500`}>
                 No valid activity rows were found in the first sheet.
               </p>
             )}
           </div>
         )}
       </div>
-    </main>
+    </ImportPageShell>
   );
 }
 
