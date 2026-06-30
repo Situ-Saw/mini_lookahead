@@ -5,9 +5,13 @@ import { Moon, Sun } from "lucide-react";
 
 interface ThemeToggleProps {
   showLabel?: boolean;
+  className?: string;
 }
 
-export default function ThemeToggle({ showLabel = false }: ThemeToggleProps) {
+export default function ThemeToggle({
+  showLabel = false,
+  className,
+}: ThemeToggleProps) {
   const [isDark, setIsDark] = useState(false);
 
   // Sync local state with whatever the blocking script already applied
@@ -44,10 +48,13 @@ export default function ThemeToggle({ showLabel = false }: ThemeToggleProps) {
       onClick={toggle}
       aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
       title={isDark ? "Switch to light mode" : "Switch to dark mode"}
-      className={`group flex w-full items-center rounded-lg py-2.5 text-sm font-medium transition-colors
+      className={
+        className ??
+        `group flex w-full items-center rounded-lg py-2.5 text-sm font-medium transition-colors
         text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900
         dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-white
-        ${showLabel ? "gap-3 px-3" : "justify-center px-0"}`}
+        ${showLabel ? "gap-3 px-3" : "justify-center px-0"}`
+      }
     >
       {isDark ? (
         <Sun className="h-5 w-5 shrink-0" aria-hidden="true" />
@@ -55,18 +62,20 @@ export default function ThemeToggle({ showLabel = false }: ThemeToggleProps) {
         <Moon className="h-5 w-5 shrink-0" aria-hidden="true" />
       )}
 
-      <span
-        className={`truncate whitespace-nowrap transition-opacity duration-200 ${
-          showLabel
-            ? "opacity-100"
-            : "pointer-events-none w-0 overflow-hidden opacity-0"
-        }`}
-      >
-        {isDark ? "Light Mode" : "Dark Mode"}
-      </span>
+      {!className && (
+        <span
+          className={`truncate whitespace-nowrap transition-opacity duration-200 ${
+            showLabel
+              ? "opacity-100"
+              : "pointer-events-none w-0 overflow-hidden opacity-0"
+          }`}
+        >
+          {isDark ? "Light Mode" : "Dark Mode"}
+        </span>
+      )}
 
       {/* Tooltip when collapsed */}
-      {!showLabel && (
+      {!className && !showLabel && (
         <span className="pointer-events-none absolute left-full z-50 ml-3 hidden whitespace-nowrap rounded-md bg-zinc-100 px-2.5 py-1.5 text-xs font-medium text-zinc-900 shadow-lg group-hover:block dark:bg-zinc-800 dark:text-white">
           {isDark ? "Light Mode" : "Dark Mode"}
         </span>

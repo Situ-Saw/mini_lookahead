@@ -48,13 +48,13 @@ function normalizeProjectMemberRow(
 
 const ROLE_BADGE_STYLES: Record<ProjectRole, string> = {
   admin:
-    "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
+    "bg-zinc-100 text-zinc-700 dark:border dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100",
   planner:
-    "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300",
+    "bg-blue-100 text-blue-700 dark:border dark:border-blue-600 dark:bg-blue-600 dark:text-white",
   site_engineer:
-    "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300",
+    "bg-amber-100 text-amber-800 dark:border dark:border-amber-600 dark:bg-amber-600 dark:text-white",
   viewer:
-    "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400",
+    "bg-gray-100 text-gray-600 dark:border dark:border-zinc-600 dark:bg-zinc-600 dark:text-white",
 };
 
 function formatRole(role: ProjectRole): string {
@@ -160,28 +160,36 @@ export default function SelectProjectPage() {
   };
 
   return (
-    <div className="relative flex min-h-screen flex-col bg-zinc-50 px-4 py-10 dark:bg-zinc-950">
+    <div className="relative flex min-h-screen flex-col bg-gradient-to-br from-[#e8f6f7] via-[#eaf4ff] to-[#f0f9ed] px-4 py-10 dark:bg-none dark:bg-[#0a1420]">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 hidden dark:block"
+        style={{
+          background:
+            "radial-gradient(circle at 30% 20%, rgba(53,159,171,0.3) 0%, transparent 50%), radial-gradient(circle at 80% 80%, rgba(84,181,251,0.25) 0%, transparent 50%)",
+        }}
+      />
       <div className="absolute right-4 top-4 sm:right-6 sm:top-6">
         <button
           type="button"
           onClick={() => void handleSignOut()}
           disabled={isSigningOut}
-          className="text-sm font-medium text-zinc-600 transition-colors hover:text-zinc-900 disabled:cursor-not-allowed disabled:opacity-50 dark:text-zinc-400 dark:hover:text-zinc-100"
+          className="text-sm font-medium text-zinc-600 transition-colors hover:text-zinc-900 disabled:cursor-not-allowed disabled:opacity-50 dark:text-zinc-300 dark:hover:text-white"
         >
           {isSigningOut ? "Signing out..." : "Sign Out"}
         </button>
       </div>
 
       <div className="flex flex-1 items-center justify-center">
-        <div className="w-full max-w-lg">
+        <div className="relative z-10 w-full max-w-lg">
           <div className="mb-8 text-center">
-            <p className="text-sm font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+            <p className="text-sm font-medium uppercase tracking-wide text-[#359FAB] dark:text-[#54B5FB]">
               Look Ahead Planner
             </p>
-            <h1 className="mt-3 text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100 sm:text-3xl">
+            <h1 className="mt-3 text-2xl font-bold tracking-tight text-zinc-900 dark:text-white sm:text-3xl">
               Select a Project
             </h1>
-            <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+            <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
               Choose a project to continue
             </p>
           </div>
@@ -198,7 +206,7 @@ export default function SelectProjectPage() {
               {fetchError}
             </p>
           ) : projects.length === 0 ? (
-            <p className="rounded-xl border border-zinc-200 bg-white px-4 py-8 text-center text-sm leading-relaxed text-zinc-600 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-400">
+            <p className="rounded-xl border border-zinc-200 bg-white px-4 py-8 text-center text-sm leading-relaxed text-zinc-600 shadow-lg dark:border-zinc-200/30 dark:bg-white/95 dark:text-zinc-500 dark:shadow-xl dark:shadow-black/30">
               No projects assigned to your account.
               <br />
               Please contact your administrator.
@@ -210,13 +218,13 @@ export default function SelectProjectPage() {
                   <button
                     type="button"
                     onClick={() => selectProject(project)}
-                    className="group flex w-full items-center gap-4 rounded-xl border border-zinc-200 bg-white p-4 text-left shadow-sm transition-all hover:border-blue-300 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-950 dark:hover:border-blue-700"
+                    className="group flex w-full items-center gap-4 rounded-xl border border-zinc-200 border-l-4 border-l-[#359FAB]/40 bg-white p-4 text-left shadow-lg shadow-black/5 transition-all hover:border-blue-300 hover:shadow-xl dark:border-zinc-200/30 dark:bg-white/95 dark:shadow-xl dark:shadow-black/30 dark:hover:border-blue-300"
                   >
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+                      <p className="truncate text-lg font-semibold text-zinc-900 dark:text-zinc-900">
                         {project.name}
                       </p>
-                      <p className="mt-0.5 font-mono text-xs text-zinc-500 dark:text-zinc-400">
+                      <p className="mt-0.5 font-mono text-xs text-zinc-500 dark:text-zinc-500">
                         {project.code}
                       </p>
                       <span

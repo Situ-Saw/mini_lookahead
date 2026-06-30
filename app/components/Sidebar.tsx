@@ -18,7 +18,6 @@ import {
 } from "lucide-react";
 import { useCurrentUser } from "@/lib/contexts/UserContext";
 import { hasRoleAccess, ROLE_ACCESS } from "@/lib/role-access";
-import ThemeToggle from "@/app/components/ThemeToggle";
 
 type NavItem = {
   label: string;
@@ -287,13 +286,6 @@ export default function Sidebar() {
                 );
               })}
         </nav>
-
-        {/* Theme toggle pinned at bottom */}
-        <div className="shrink-0 border-t border-zinc-200 p-2 dark:border-zinc-700">
-          <div className="relative">
-            <ThemeToggle showLabel={showLabels} />
-          </div>
-        </div>
       </aside>
     </>
   );

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import ThemeToggle from "@/app/components/ThemeToggle";
 
 const INVALID_CREDENTIALS_MESSAGE =
   "Invalid User ID or password. Please check your credentials and try again.";
@@ -48,6 +49,10 @@ export default function LoginPage() {
 
   return (
     <div className="relative flex h-screen overflow-hidden bg-gradient-to-br from-[#e8f6f7] via-[#eaf4ff] to-[#f0f9ed] dark:bg-none dark:bg-[#0a1420]">
+      <ThemeToggle
+        className="fixed top-4 right-4 z-50 flex h-10 w-10 items-center justify-center rounded-full border border-zinc-200 bg-white/90 text-zinc-700 shadow-lg transition-colors hover:bg-white dark:border-white/10 dark:bg-white/10 dark:text-zinc-200 dark:hover:bg-white/20"
+      />
+
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-0 hidden dark:block"
