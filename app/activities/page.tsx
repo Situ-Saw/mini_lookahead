@@ -137,10 +137,10 @@ function SeStatusBadge({ status }: { status: string | null }) {
 
   const className =
     normalized === "completed"
-      ? "bg-emerald-100 text-emerald-800 ring-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-200 dark:ring-emerald-900"
+      ? "bg-emerald-100 text-emerald-800 ring-emerald-200 dark:bg-emerald-100 dark:text-emerald-700 dark:ring-emerald-200"
       : normalized === "in progress"
-        ? "bg-amber-100 text-amber-800 ring-amber-200 dark:bg-amber-950/50 dark:text-amber-200 dark:ring-amber-900"
-        : "bg-zinc-100 text-zinc-700 ring-zinc-200 dark:bg-zinc-800 dark:text-zinc-200 dark:ring-zinc-700";
+        ? "bg-amber-100 text-amber-800 ring-amber-200 dark:bg-amber-100 dark:text-amber-700 dark:ring-amber-200"
+        : "bg-zinc-100 text-zinc-700 ring-zinc-200 dark:bg-zinc-100 dark:text-zinc-700 dark:ring-zinc-200";
 
   return (
     <span
@@ -583,7 +583,7 @@ function ActivityHistoryPanel({
               Loading history...
             </div>
           ) : error ? (
-            <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
+            <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-200 dark:bg-red-50 dark:text-red-800">
               {error}
             </p>
           ) : entries.length === 0 ? (
@@ -591,7 +591,7 @@ function ActivityHistoryPanel({
               No history recorded for this activity yet.
             </p>
           ) : (
-            <div className="relative space-y-0 pl-6 before:absolute before:bottom-2 before:left-[7px] before:top-2 before:w-px before:bg-zinc-200 dark:before:bg-zinc-700">
+            <div className="relative space-y-0 pl-6 before:absolute before:bottom-2 before:left-[7px] before:top-2 before:w-px before:bg-zinc-200 dark:before:bg-zinc-200">
               {entries.map((entry) => (
                 <div key={entry.id} className="relative pb-6 last:pb-0">
                   <span
@@ -761,12 +761,12 @@ function StatusBadge({ status }: { status: string | null }) {
 
   const className =
     category === "not_started"
-      ? "bg-zinc-100 text-zinc-700 ring-zinc-200 dark:bg-zinc-800 dark:text-zinc-200 dark:ring-zinc-700"
+      ? "bg-zinc-100 text-zinc-700 ring-zinc-200 dark:bg-zinc-100 dark:text-zinc-700 dark:ring-zinc-200"
       : category === "in_progress"
-        ? "bg-blue-100 text-blue-800 ring-blue-200 dark:bg-blue-950/50 dark:text-blue-200 dark:ring-blue-900"
+        ? "bg-blue-100 text-blue-800 ring-blue-200 dark:bg-blue-100 dark:text-blue-700 dark:ring-blue-200"
         : category === "completed"
-          ? "bg-emerald-100 text-emerald-800 ring-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-200 dark:ring-emerald-900"
-          : "bg-zinc-100 text-zinc-700 ring-zinc-200 dark:bg-zinc-800 dark:text-zinc-200 dark:ring-zinc-700";
+          ? "bg-emerald-100 text-emerald-800 ring-emerald-200 dark:bg-emerald-100 dark:text-emerald-700 dark:ring-emerald-200"
+          : "bg-zinc-100 text-zinc-700 ring-zinc-200 dark:bg-zinc-100 dark:text-zinc-700 dark:ring-zinc-200";
 
   return (
     <span
@@ -782,7 +782,7 @@ function DelayBadge({ delayDays }: { delayDays: number | string | null }) {
 
   if (parsed === null) {
     return (
-      <span className="inline-flex items-center rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-600 ring-1 ring-inset ring-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:ring-zinc-700">
+      <span className="inline-flex items-center rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-600 ring-1 ring-inset ring-zinc-200 dark:bg-zinc-100 dark:text-zinc-700 dark:ring-zinc-200">
         —
       </span>
     );
@@ -790,7 +790,7 @@ function DelayBadge({ delayDays }: { delayDays: number | string | null }) {
 
   if (parsed === 0) {
     return (
-      <span className="inline-flex items-center rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-600 ring-1 ring-inset ring-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:ring-zinc-700">
+      <span className="inline-flex items-center rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-600 ring-1 ring-inset ring-zinc-200 dark:bg-zinc-100 dark:text-zinc-700 dark:ring-zinc-200">
         On Track
       </span>
     );
@@ -798,14 +798,14 @@ function DelayBadge({ delayDays }: { delayDays: number | string | null }) {
 
   if (parsed > 0) {
     return (
-      <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-1 text-xs font-medium text-red-800 ring-1 ring-inset ring-red-200 dark:bg-red-950/50 dark:text-red-200 dark:ring-red-900">
+      <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-1 text-xs font-medium text-red-800 ring-1 ring-inset ring-red-200 dark:bg-red-100 dark:text-red-700 dark:ring-red-200">
         +{parsed} days
       </span>
     );
   }
 
   return (
-    <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-800 ring-1 ring-inset ring-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-200 dark:ring-emerald-900">
+    <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-800 ring-1 ring-inset ring-emerald-200 dark:bg-emerald-100 dark:text-emerald-700 dark:ring-emerald-200">
       {parsed} days
     </span>
   );
@@ -817,7 +817,7 @@ function ProgressBar({ progress }: { progress: number }) {
 
   return (
     <div className="flex min-w-[7rem] items-center gap-2">
-      <div className="h-2 flex-1 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
+      <div className="h-2 flex-1 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-200">
         <div
           className={`h-full rounded-full transition-all ${barColor}`}
           style={{ width: `${normalized}%` }}
@@ -1003,13 +1003,13 @@ function AssignActivityModal({
             ) : (
               <>
                 {incompleteCount !== null && incompleteCount > 0 && (
-                  <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
+                  <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-200 dark:bg-amber-50 dark:text-amber-900">
                     ⚠️ This engineer has {incompleteCount} incomplete{" "}
                     {incompleteCount === 1 ? "activity" : "activities"}
                   </p>
                 )}
                 {openConstraintsCount !== null && openConstraintsCount > 0 && (
-                  <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
+                  <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-200 dark:bg-amber-50 dark:text-amber-900">
                     ⚠️ This engineer has {openConstraintsCount} open{" "}
                     {openConstraintsCount === 1 ? "constraint" : "constraints"}
                   </p>
@@ -1020,7 +1020,7 @@ function AssignActivityModal({
         )}
 
         {assignError && (
-          <p className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
+          <p className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-200 dark:bg-red-50 dark:text-red-800">
             {assignError}
           </p>
         )}
@@ -2207,7 +2207,7 @@ function SiteEngineerMyViewersSection({
           Loading viewers...
         </div>
       ) : fetchError ? (
-        <p className="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
+        <p className="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-200 dark:bg-red-50 dark:text-red-800">
           {fetchError}
         </p>
       ) : viewers.length === 0 ? (

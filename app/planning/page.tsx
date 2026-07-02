@@ -376,20 +376,20 @@ function getPpcColorClasses(ppc: number): {
   if (ppc >= 71) {
     return {
       badge:
-        "bg-emerald-100 text-emerald-800 ring-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-200 dark:ring-emerald-900",
+        "bg-emerald-100 text-emerald-800 ring-emerald-200 dark:bg-emerald-100 dark:text-emerald-700 dark:ring-emerald-200",
       bar: "#10b981",
     };
   }
   if (ppc >= 41) {
     return {
       badge:
-        "bg-amber-100 text-amber-800 ring-amber-200 dark:bg-amber-950/50 dark:text-amber-200 dark:ring-amber-900",
+        "bg-amber-100 text-amber-800 ring-amber-200 dark:bg-amber-100 dark:text-amber-700 dark:ring-amber-200",
       bar: "#f59e0b",
     };
   }
   return {
     badge:
-      "bg-red-100 text-red-800 ring-red-200 dark:bg-red-950/50 dark:text-red-200 dark:ring-red-900",
+      "bg-red-100 text-red-800 ring-red-200 dark:bg-red-100 dark:text-red-700 dark:ring-red-200",
     bar: "#ef4444",
   };
 }
@@ -484,12 +484,12 @@ function StatusBadge({ status }: { status: string | null }) {
 
   const className =
     category === "not_started"
-      ? "bg-zinc-100 text-zinc-700 ring-zinc-200 dark:bg-zinc-800 dark:text-zinc-200 dark:ring-zinc-700"
+      ? "bg-zinc-100 text-zinc-700 ring-zinc-200 dark:bg-zinc-100 dark:text-zinc-700 dark:ring-zinc-200"
       : category === "in_progress"
-        ? "bg-blue-100 text-blue-800 ring-blue-200 dark:bg-blue-950/50 dark:text-blue-200 dark:ring-blue-900"
+        ? "bg-blue-100 text-blue-800 ring-blue-200 dark:bg-blue-100 dark:text-blue-700 dark:ring-blue-200"
         : category === "completed"
-          ? "bg-emerald-100 text-emerald-800 ring-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-200 dark:ring-emerald-900"
-          : "bg-zinc-100 text-zinc-700 ring-zinc-200 dark:bg-zinc-800 dark:text-zinc-200 dark:ring-zinc-700";
+          ? "bg-emerald-100 text-emerald-800 ring-emerald-200 dark:bg-emerald-100 dark:text-emerald-700 dark:ring-emerald-200"
+          : "bg-zinc-100 text-zinc-700 ring-zinc-200 dark:bg-zinc-100 dark:text-zinc-700 dark:ring-zinc-200";
 
   return (
     <span
@@ -693,7 +693,7 @@ function SessionDetailModal({
             Loading session details...
           </div>
         ) : errorMessage ? (
-          <p className="mt-6 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
+          <p className="mt-6 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-200 dark:bg-red-50 dark:text-red-800">
             {errorMessage}
           </p>
         ) : activities.length === 0 ? (
@@ -739,11 +739,11 @@ function SessionDetailModal({
                     </td>
                     <td className="whitespace-nowrap px-4 py-3">
                       {row.was_completed ? (
-                        <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-800 ring-1 ring-inset ring-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-200 dark:ring-emerald-900">
+                        <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-800 ring-1 ring-inset ring-emerald-200 dark:bg-emerald-100 dark:text-emerald-700 dark:ring-emerald-200">
                           Completed
                         </span>
                       ) : (
-                        <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-1 text-xs font-medium text-red-800 ring-1 ring-inset ring-red-200 dark:bg-red-950/50 dark:text-red-200 dark:ring-red-900">
+                        <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-1 text-xs font-medium text-red-800 ring-1 ring-inset ring-red-200 dark:bg-red-100 dark:text-red-700 dark:ring-red-200">
                           Not Completed
                         </span>
                       )}
@@ -873,7 +873,7 @@ function VarianceCloseModal({
         </div>
 
         {errorMessage && (
-          <p className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
+          <p className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-200 dark:bg-red-50 dark:text-red-800">
             {errorMessage}
           </p>
         )}
@@ -1814,13 +1814,13 @@ export default function PlanningPage() {
       </div>
 
       {fetchError && (
-        <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
+        <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-200 dark:bg-red-50 dark:text-red-800">
           {fetchError}
         </p>
       )}
 
       {actionError && (
-        <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
+        <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-200 dark:bg-red-50 dark:text-red-800">
           {actionError}
         </p>
       )}
@@ -1960,7 +1960,7 @@ export default function PlanningPage() {
                                     ))}
                                   </select>
                                   {assignError && (
-                                    <p className="text-xs text-red-600 dark:text-red-400">
+                                    <p className="text-xs text-red-600 dark:text-red-600">
                                       {assignError}
                                     </p>
                                   )}
@@ -1970,7 +1970,7 @@ export default function PlanningPage() {
 
                             return (
                               <div className="flex flex-wrap items-center gap-2">
-                                <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-800 ring-1 ring-inset ring-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-200 dark:ring-emerald-900">
+                                <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-800 ring-1 ring-inset ring-emerald-200 dark:bg-emerald-100 dark:text-emerald-700 dark:ring-emerald-200">
                                   {assignment.name}
                                 </span>
                                 <button
@@ -1988,7 +1988,7 @@ export default function PlanningPage() {
                                   Reassign
                                 </button>
                                 {assignError && (
-                                  <p className="w-full text-xs text-red-600 dark:text-red-400">
+                                  <p className="w-full text-xs text-red-600 dark:text-red-600">
                                     {assignError}
                                   </p>
                                 )}
@@ -2008,7 +2008,7 @@ export default function PlanningPage() {
                             category === "completed"
                           ) {
                             return (
-                              <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-800 ring-1 ring-inset ring-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-200 dark:ring-emerald-900">
+                              <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-800 ring-1 ring-inset ring-emerald-200 dark:bg-emerald-100 dark:text-emerald-700 dark:ring-emerald-200">
                                 Completed
                               </span>
                             );
@@ -2314,7 +2314,7 @@ export default function PlanningPage() {
                               {varianceBreakdown.map((entry) => (
                                 <span
                                   key={entry.reason}
-                                  className="inline-flex items-center rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-700 ring-1 ring-inset ring-zinc-200 dark:bg-zinc-800 dark:text-zinc-200 dark:ring-zinc-700"
+                                  className="inline-flex items-center rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-700 ring-1 ring-inset ring-zinc-200 dark:bg-zinc-100 dark:text-zinc-700 dark:ring-zinc-200"
                                 >
                                   {entry.reason} ×{entry.count}
                                 </span>
