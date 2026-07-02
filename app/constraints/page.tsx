@@ -233,8 +233,8 @@ function StatusBadge({ status }: { status: string }) {
     <span
       className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset ${
         isOpen
-          ? "bg-amber-100 text-amber-800 ring-amber-200 dark:bg-amber-950/50 dark:text-amber-200 dark:ring-amber-900"
-          : "bg-emerald-100 text-emerald-800 ring-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-200 dark:ring-emerald-900"
+          ? "bg-amber-100 text-amber-800 ring-amber-200 dark:bg-amber-100 dark:text-amber-700 dark:ring-amber-200"
+          : "bg-emerald-100 text-emerald-800 ring-emerald-200 dark:bg-emerald-100 dark:text-emerald-700 dark:ring-emerald-200"
       }`}
     >
       {status}
@@ -386,7 +386,7 @@ function ActivityIdField({
             placeholder="Optional"
             className={ACTIVITY_FIELD_INPUT_CLASS}
           />
-          <p className="mt-1.5 text-xs text-amber-700 dark:text-amber-300">
+          <p className="mt-1.5 text-xs text-amber-700 dark:text-amber-700">
             Could not load activities. You can type an Activity ID manually.
           </p>
         </>
@@ -710,7 +710,7 @@ function ConstraintModal({
         </div>
 
         {saveError && (
-          <p className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
+          <p className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-200 dark:bg-red-50 dark:text-red-800">
             {saveError}
           </p>
         )}
@@ -1490,7 +1490,7 @@ export default function ConstraintsPage() {
                       )}
 
                       {rowErrors[constraint.id] && (
-                        <p className="mt-2 text-xs text-red-600 dark:text-red-400">
+                        <p className="mt-2 text-xs text-red-600 dark:text-red-600">
                           {rowErrors[constraint.id]}
                         </p>
                       )}
