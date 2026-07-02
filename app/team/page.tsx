@@ -905,6 +905,7 @@ export default function TeamPage() {
                             ? formatDate(member.joined_at)
                             : "—"}
                         </span>
+
                       </td>
                     </tr>
                   ))}
