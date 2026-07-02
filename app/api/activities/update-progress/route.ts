@@ -65,6 +65,30 @@ export async function POST(request: Request) {
     );
   }
 
+  if (safeProgress >= 100) {
+    const { data: openConstraints, error: constraintsError } = await supabase
+      .from("constraints")
+      .select("activity_id")
+      .eq("project_id", project_id)
+      .eq("activity_id", activity_id)
+      .eq("status", "Open")
+      .limit(1);
+
+    if (constraintsError) {
+      return NextResponse.json(
+        { error: constraintsError.message },
+        { status: 500 },
+      );
+    }
+
+    if ((openConstraints ?? []).length > 0) {
+      return NextResponse.json(
+        { error: "Activity has open constraints and cannot be marked 100% complete." },
+        { status: 409 },
+      );
+    }
+  }
+
   const progressFrom =
     typeof currentActivity.progress === "number"
       ? currentActivity.progress
